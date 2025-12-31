@@ -1,5 +1,5 @@
 import { useMidi, type MidiNoteEvent, useAudio } from "./hooks/index.js"
-import { SheetMusic, AudioPlayer } from "./components/index.js"
+import { SheetMusic, AudioPlayer, PieceLibrary } from "./components/index.js"
 import { useCallback, useState, useRef } from "react"
 
 // Convert MIDI pitch to note name
@@ -131,30 +131,41 @@ export function App() {
 
       <section style={{ marginTop: "2rem" }}>
         <h2>Sheet Music</h2>
-        <div style={{ marginBottom: "1rem" }}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xml,.musicxml"
-            onChange={handleFileSelect}
-            style={{ display: "none" }}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            style={{ padding: "0.5rem 1rem", fontSize: "1rem" }}
-          >
-            Load MusicXML File
-          </button>
-          {musicXml && (
-            <button
-              onClick={() => setMusicXml(null)}
-              style={{ padding: "0.5rem 1rem", fontSize: "1rem", marginLeft: "0.5rem" }}
-            >
-              Clear
-            </button>
-          )}
+        <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start" }}>
+          <div style={{ minWidth: "200px" }}>
+            <PieceLibrary onSelect={setMusicXml} />
+            <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #ddd" }}>
+              <h3 style={{ margin: "0 0 0.5rem 0" }}>Or load your own</h3>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xml,.musicxml"
+                onChange={handleFileSelect}
+                style={{ display: "none" }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{ padding: "0.5rem 1rem", fontSize: "0.875rem" }}
+              >
+                Load MusicXML File
+              </button>
+            </div>
+            {musicXml && (
+              <button
+                onClick={() => {
+                  setMusicXml(null)
+                  setMidiBase64(null)
+                }}
+                style={{ padding: "0.5rem 1rem", fontSize: "0.875rem", marginTop: "0.5rem" }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div style={{ flex: 1 }}>
+            <SheetMusic musicXml={musicXml} scale={35} onMidiReady={setMidiBase64} />
+          </div>
         </div>
-        <SheetMusic musicXml={musicXml} scale={35} onMidiReady={setMidiBase64} />
       </section>
 
       <section style={{ marginTop: "2rem" }}>
