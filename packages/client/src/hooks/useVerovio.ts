@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react"
-import { createToolkit, type VerovioToolkit } from "verovio/esm"
+import createVerovioModule from "verovio/wasm"
+import { VerovioToolkit } from "verovio/esm"
 
 export interface VerovioOptions {
   scale?: number
@@ -58,9 +59,10 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
   useEffect(() => {
     let mounted = true
 
-    createToolkit()
-      .then((toolkit) => {
+    createVerovioModule()
+      .then((module) => {
         if (!mounted) return
+        const toolkit = new VerovioToolkit(module)
         toolkitRef.current = toolkit
         toolkit.setOptions(initialOptionsRef.current as Record<string, unknown>)
         setIsReady(true)
