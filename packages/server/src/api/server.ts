@@ -1,5 +1,11 @@
-import { Layer, pipe } from "effect"
-import { HttpRouter, HttpServer, HttpServerResponse } from "@effect/platform"
+import { Effect, Layer, pipe } from "effect"
+import {
+  HttpRouter,
+  HttpServer,
+  HttpServerResponse,
+  HttpServerRequest,
+  HttpApp,
+} from "@effect/platform"
 import { BunHttpServer } from "@effect/platform-bun"
 import { SessionServiceLive } from "../services/session.js"
 import { ComparisonServiceLive } from "../services/comparison.js"
@@ -11,24 +17,40 @@ import { sessionRoutes } from "./routes/session.js"
 const PORT = 3001
 
 // Build service layers bottom-up
-// SessionServiceLive depends on: PieceRepo, AttemptRepo, ComparisonService
-// PieceRepoLive, AttemptRepoLive depend on: SqlClient
-// ComparisonServiceLive has no dependencies
-
 const RepoLayer = pipe(
   Layer.mergeAll(PieceRepoLive, AttemptRepoLive),
   Layer.provide(SqlLive)
 )
 
-// SessionServiceLive needs repos and comparison service
 const SessionLayer = pipe(
   SessionServiceLive,
   Layer.provide(RepoLayer),
   Layer.provide(ComparisonServiceLive)
 )
 
-// Merge everything together for routes to use
 const ServiceLayer = Layer.merge(SessionLayer, ComparisonServiceLive)
+
+// Add CORS headers to all responses
+const addCorsHeaders = <E, R>(app: HttpApp.Default<E, R>): HttpApp.Default<E, R> =>
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest
+
+    // Handle preflight OPTIONS
+    if (request.method === "OPTIONS") {
+      return HttpServerResponse.empty({
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Max-Age": "86400",
+        },
+      })
+    }
+
+    const response = yield* app
+    return HttpServerResponse.setHeader(response, "Access-Control-Allow-Origin", "*")
+  }) as HttpApp.Default<E, R>
 
 // Build router with all routes
 const router = HttpRouter.empty.pipe(
@@ -36,9 +58,12 @@ const router = HttpRouter.empty.pipe(
   HttpRouter.mount("/api/session", sessionRoutes)
 )
 
+// Apply CORS to router
+const routerWithCors = addCorsHeaders(router)
+
 // Layer that provides the HTTP server
 export const HttpLive = pipe(
-  router,
+  routerWithCors,
   HttpServer.serve(),
   HttpServer.withLogAddress,
   Layer.provide(BunHttpServer.layer({ port: PORT })),
