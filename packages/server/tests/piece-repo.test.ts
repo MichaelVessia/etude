@@ -2,7 +2,7 @@ import { describe, expect, it } from "@codeforbreakfast/bun-test-effect"
 import { Effect, Option } from "effect"
 import { PieceRepo, PieceRepoLive } from "../src/repos/piece-repo.js"
 import { makeTestLayer, setupTables, clearTables } from "./helpers/test-db.js"
-import { PieceId, MeasureNumber } from "@etude/shared"
+import { PieceId } from "@etude/shared"
 
 const TestLayer = makeTestLayer(PieceRepoLive)
 

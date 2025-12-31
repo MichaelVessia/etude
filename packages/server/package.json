@@ -16,7 +16,8 @@
     "@effect/rpc": "*",
     "@effect/sql": "*",
     "@effect/sql-sqlite-bun": "*",
-    "drizzle-orm": "*"
+    "drizzle-orm": "*",
+    "fast-xml-parser": "*"
   },
   "devDependencies": {
     "drizzle-kit": "*"
