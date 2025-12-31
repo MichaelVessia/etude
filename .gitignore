@@ -1,0 +1,7 @@
+.direnv/
+result
+.lefthook-local.yml
+node_modules/
+data/
+dist/
+*.tsbuildinfo

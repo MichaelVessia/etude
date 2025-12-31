@@ -1,0 +1,24 @@
+{
+  "name": "@etude/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/main.ts",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts"
+  },
+  "dependencies": {
+    "@etude/shared": "workspace:*",
+    "effect": "*",
+    "@effect/platform": "*",
+    "@effect/platform-bun": "*",
+    "@effect/rpc": "*",
+    "@effect/sql": "*",
+    "@effect/sql-sqlite-bun": "*",
+    "drizzle-orm": "*"
+  },
+  "devDependencies": {
+    "drizzle-kit": "*"
+  }
+}

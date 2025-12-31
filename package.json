@@ -1,0 +1,21 @@
+{
+  "name": "etude",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "prepare": "effect-language-service patch",
+    "typecheck": "tsc --build packages/shared packages/server && tsc --noEmit -p packages/client",
+    "lint": "oxlint packages/",
+    "lint:fix": "oxlint --fix packages/",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "devDependencies": {
+    "@codeforbreakfast/bun-test-effect": "^0.4.1",
+    "@effect/language-service": "^0.63.2",
+    "@types/bun": "^1.3.5",
+    "oxlint": "^1.36.0",
+    "typescript": "^5.9.3"
+  }
+}
