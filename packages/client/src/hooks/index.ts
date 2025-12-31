@@ -6,3 +6,14 @@ export type { VerovioOptions, UseVerovioResult } from "./useVerovio.js"
 
 export { useAudio } from "./useAudio.js"
 export type { NoteToPlay, UseAudioResult } from "./useAudio.js"
+
+export { useSession } from "./useSession.js"
+export type {
+  Hand,
+  SessionStartParams,
+  SessionStartResult,
+  NoteSubmitResult,
+  SessionEndResult,
+  SessionState,
+  UseSessionResult,
+} from "./useSession.js"
