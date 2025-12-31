@@ -30,6 +30,28 @@ const NOTE_OFF_MAX = 0x8f
 const NOTE_ON_MIN = 0x90
 const NOTE_ON_MAX = 0x9f
 
+const STORAGE_KEY = "etude:midi-device"
+
+function getStoredDeviceName(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function storeDeviceName(name: string | null): void {
+  try {
+    if (name) {
+      localStorage.setItem(STORAGE_KEY, name)
+    } else {
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult {
   const [isSupported] = useState(() => "requestMIDIAccess" in navigator)
   const [midiAccess, setMidiAccess] = useState<MIDIAccess | null>(null)
@@ -68,6 +90,14 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
         })
       })
       setDevices(inputDevices)
+
+      // Auto-select remembered device if no device currently selected
+      setSelectedDevice((current) => {
+        if (current !== null) return current
+        const storedName = getStoredDeviceName()
+        if (!storedName) return null
+        return inputDevices.find((d) => d.name === storedName) ?? null
+      })
     }
 
     updateDevices()
@@ -135,10 +165,12 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
     (id: string | null) => {
       if (!id) {
         setSelectedDevice(null)
+        storeDeviceName(null)
         return
       }
       const device = devices.find((d) => d.id === id)
       setSelectedDevice(device ?? null)
+      storeDeviceName(device?.name ?? null)
     },
     [devices]
   )
