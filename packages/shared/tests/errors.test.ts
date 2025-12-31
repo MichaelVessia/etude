@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@codeforbreakfast/bun-test-effect"
-import { Schema, Effect } from "effect"
+import { Schema } from "effect"
 import { ParseError, SessionError, PieceNotFound } from "../src/errors.js"
 import { PieceId } from "../src/domain.js"
 
