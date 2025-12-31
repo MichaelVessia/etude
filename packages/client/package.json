@@ -9,11 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@effect/platform": "*",
     "@etude/shared": "workspace:*",
     "effect": "*",
-    "@effect/platform": "*",
     "react": "*",
-    "react-dom": "*"
+    "react-dom": "*",
+    "verovio": "^5.7.0"
   },
   "devDependencies": {
     "@types/react": "*",
