@@ -4,16 +4,26 @@ import { useEffect } from "react"
 interface SheetMusicProps {
   musicXml: string | null
   scale?: number
+  onMidiReady?: (midiBase64: string | null) => void
 }
 
-export function SheetMusic({ musicXml, scale = 40 }: SheetMusicProps) {
-  const { isReady, isLoading, error, svg, pageCount, currentPage, setPage, loadMusicXml } = useVerovio({ scale })
+export function SheetMusic({ musicXml, scale = 40, onMidiReady }: SheetMusicProps) {
+  const { isReady, isLoading, error, svg, pageCount, currentPage, setPage, loadMusicXml, getMidiBase64 } = useVerovio({
+    scale,
+  })
 
   useEffect(() => {
     if (musicXml && isReady) {
       loadMusicXml(musicXml)
     }
   }, [musicXml, isReady, loadMusicXml])
+
+  // Notify parent when MIDI is ready
+  useEffect(() => {
+    if (svg && onMidiReady) {
+      onMidiReady(getMidiBase64())
+    }
+  }, [svg, onMidiReady, getMidiBase64])
 
   if (isLoading) {
     return <div style={{ padding: "1rem", color: "#666" }}>Loading Verovio...</div>

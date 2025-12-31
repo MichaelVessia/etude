@@ -11,9 +11,11 @@
   "dependencies": {
     "@effect/platform": "*",
     "@etude/shared": "workspace:*",
+    "@tonejs/midi": "^2.0.28",
     "effect": "*",
     "react": "*",
     "react-dom": "*",
+    "tone": "^15.1.22",
     "verovio": "^5.7.0"
   },
   "devDependencies": {

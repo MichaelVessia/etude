@@ -1,5 +1,5 @@
-import { useMidi, type MidiNoteEvent } from "./hooks/index.js"
-import { SheetMusic } from "./components/index.js"
+import { useMidi, type MidiNoteEvent, useAudio } from "./hooks/index.js"
+import { SheetMusic, AudioPlayer } from "./components/index.js"
 import { useCallback, useState, useRef } from "react"
 
 // Convert MIDI pitch to note name
@@ -13,14 +13,23 @@ function pitchToNote(pitch: number): string {
 export function App() {
   const [noteHistory, setNoteHistory] = useState<MidiNoteEvent[]>([])
   const [musicXml, setMusicXml] = useState<string | null>(null)
+  const [midiBase64, setMidiBase64] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { isReady: audioReady, playNote } = useAudio()
 
-  const handleNote = useCallback((event: MidiNoteEvent) => {
-    setNoteHistory((prev) => [...prev.slice(-19), event])
-    console.log(
-      `${event.on ? "Note On" : "Note Off"}: ${pitchToNote(event.pitch)} (${event.pitch}) vel=${event.velocity}`
-    )
-  }, [])
+  const handleNote = useCallback(
+    (event: MidiNoteEvent) => {
+      setNoteHistory((prev) => [...prev.slice(-19), event])
+      console.log(
+        `${event.on ? "Note On" : "Note Off"}: ${pitchToNote(event.pitch)} (${event.pitch}) vel=${event.velocity}`
+      )
+      // Play the note through the audio engine
+      if (event.on && audioReady) {
+        playNote(event.pitch, 0.3)
+      }
+    },
+    [audioReady, playNote]
+  )
 
   const midi = useMidi(handleNote)
 
@@ -145,7 +154,12 @@ export function App() {
             </button>
           )}
         </div>
-        <SheetMusic musicXml={musicXml} scale={35} />
+        <SheetMusic musicXml={musicXml} scale={35} onMidiReady={setMidiBase64} />
+      </section>
+
+      <section style={{ marginTop: "2rem" }}>
+        <h2>Playback</h2>
+        <AudioPlayer midiBase64={midiBase64} />
       </section>
     </div>
   )
