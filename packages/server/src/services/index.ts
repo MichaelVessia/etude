@@ -11,3 +11,12 @@ export {
   type MatchResultType,
   type ComparisonResult,
 } from "./comparison.js"
+
+export {
+  SessionService,
+  SessionServiceLive,
+  type SessionState,
+  type SessionStartResult,
+  type NoteSubmitResult,
+  type SessionEndResult,
+} from "./session.js"
