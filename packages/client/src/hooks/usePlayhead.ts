@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from "react"
+import { useCallback, useMemo, useRef, useState, useEffect } from "react"
 import type { NoteElementInfo } from "./useVerovio.js"
 
 export interface PlayheadPosition {
@@ -175,9 +175,14 @@ export function usePlayhead(
     const svgBounds = svgElement.getBoundingClientRect()
     svgBoundsRef.current = svgBounds
 
+    console.log("[Playhead] Initializing with", noteElements.length, "notes")
+
     for (const note of noteElements) {
       const el = document.getElementById(note.elementId)
-      if (!el) continue
+      if (!el) {
+        console.log("[Playhead] Element not found:", note.elementId)
+        continue
+      }
 
       const bounds = el.getBoundingClientRect()
       // Convert to coordinates relative to SVG
@@ -197,6 +202,11 @@ export function usePlayhead(
     // Sort by time
     positions.sort((a, b) => a.time - b.time)
     notePositionsRef.current = positions
+
+    console.log("[Playhead] Found", positions.length, "note positions")
+    if (positions.length > 0) {
+      console.log("[Playhead] First position:", positions[0])
+    }
 
     // Set initial position
     if (positions.length > 0) {
@@ -241,7 +251,8 @@ export function usePlayhead(
     }
   }, [stop])
 
-  return {
+  // Return memoized object - changes when state or methods change
+  return useMemo(() => ({
     position,
     isRunning,
     currentTime,
@@ -249,5 +260,5 @@ export function usePlayhead(
     start,
     stop,
     reset,
-  }
+  }), [position, isRunning, currentTime, initialize, start, stop, reset])
 }

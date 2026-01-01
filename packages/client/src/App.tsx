@@ -54,19 +54,27 @@ export function App() {
   // Sheet music page state (for auto page turn)
   const [sheetMusicPage, setSheetMusicPage] = useState(1)
 
+  // Memoized callbacks for playhead
+  const handlePlayheadTimeUpdate = useCallback(
+    (time: number) => noteColoring.markMissedNotes(time),
+    [noteColoring]
+  )
+  const handlePlayheadEnd = useCallback(() => {
+    if (session.isActive) {
+      session.endSession()
+    }
+  }, [session])
+  const handlePlayheadPageChange = useCallback(
+    (page: number) => setSheetMusicPage(page),
+    []
+  )
+
   // Playhead for timing reference
   const svgElementRef = useRef<SVGElement | null>(null)
   const playhead = usePlayhead(
-    // On time update: mark missed notes
-    (time) => noteColoring.markMissedNotes(time),
-    // On end: auto-end session
-    () => {
-      if (session.isActive) {
-        session.endSession()
-      }
-    },
-    // On page change: update sheet music page
-    (page) => setSheetMusicPage(page)
+    handlePlayheadTimeUpdate,
+    handlePlayheadEnd,
+    handlePlayheadPageChange
   )
 
   // Initialize note map and playhead when sheet music loads

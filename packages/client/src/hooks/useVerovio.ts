@@ -150,20 +150,32 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
   // Parses the SVG to find note IDs and queries Verovio for timing info
   const getNoteElements = useCallback((): NoteElementInfo[] => {
     const toolkit = toolkitRef.current
-    if (!toolkit || !svg) return []
+    if (!toolkit || !svg) {
+      console.log("[Verovio] getNoteElements: toolkit or svg not ready")
+      return []
+    }
 
     try {
-      // Parse SVG to find all note elements (they have IDs starting with "note-")
+      // Must render MIDI before querying MIDI values
+      toolkit.renderToMIDI()
+
+      // Parse SVG to find all note elements (they have class "note")
       const parser = new DOMParser()
       const doc = parser.parseFromString(svg, "image/svg+xml")
-      const noteElements = doc.querySelectorAll('[id^="note-"]')
+      const noteElements = doc.querySelectorAll(".note")
+      console.log("[Verovio] Found", noteElements.length, "note elements in SVG")
 
       const notes: NoteElementInfo[] = []
       noteElements.forEach((el) => {
         const elementId = el.id
+        if (!elementId) return // Skip elements without IDs
         try {
           const midiValues = toolkit.getMIDIValuesForElement(elementId)
-          if (midiValues) {
+          // Debug: log first few values to see actual property names
+          if (notes.length < 3) {
+            console.log("[Verovio] MIDI values for", elementId, ":", JSON.stringify(midiValues))
+          }
+          if (midiValues && midiValues.pitch !== undefined) {
             // Get page number for this element
             let page = 1
             try {
@@ -174,7 +186,7 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
             notes.push({
               elementId,
               pitch: midiValues.pitch,
-              onset: midiValues.onset, // Verovio returns onset in milliseconds
+              onset: midiValues.time,
               duration: midiValues.duration,
               page,
             })
@@ -184,8 +196,10 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
         }
       })
 
+      console.log("[Verovio] Returning", notes.length, "notes with MIDI values")
       return notes
-    } catch {
+    } catch (e) {
+      console.error("[Verovio] Error in getNoteElements:", e)
       return []
     }
   }, [svg])

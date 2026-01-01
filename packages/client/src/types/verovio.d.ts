@@ -18,8 +18,8 @@ declare module "verovio/esm" {
 
   export interface MidiValues {
     pitch: number
-    onset: number
-    duration: number
+    time: number      // onset time in milliseconds
+    duration: number  // duration in milliseconds
   }
 
   export interface ElementsAtTime {

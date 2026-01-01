@@ -16,12 +16,20 @@ interface SheetMusicProps {
 
 export function SheetMusic({ musicXml, scale = 40, onMidiReady, onNoteElementsReady, playheadPosition, showPlayhead = false, page }: SheetMusicProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  // Use ref instead of state to prevent re-render loops
+  const noteElementsInitializedRef = useRef(false)
+  const lastMusicXmlRef = useRef<string | null>(null)
   const { isReady, isLoading, error, svg, pageCount, currentPage, setPage, loadMusicXml, getMidiBase64, getNoteElements } = useVerovio({
     scale,
   })
 
   useEffect(() => {
     if (musicXml && isReady) {
+      // Reset initialization flag when loading new music
+      if (musicXml !== lastMusicXmlRef.current) {
+        noteElementsInitializedRef.current = false
+        lastMusicXmlRef.current = musicXml
+      }
       loadMusicXml(musicXml)
     }
   }, [musicXml, isReady, loadMusicXml])
@@ -40,17 +48,25 @@ export function SheetMusic({ musicXml, scale = 40, onMidiReady, onNoteElementsRe
     }
   }, [svg, onMidiReady, getMidiBase64])
 
-  // Notify parent when note elements are ready for coloring
+  // Notify parent when note elements are ready for coloring (only once per music load)
+  // Using refs to prevent re-render loops - check ref BEFORE scheduling, set ref INSIDE timeout
   useEffect(() => {
-    if (svg && onNoteElementsReady) {
-      // Slight delay to ensure SVG is rendered in DOM
-      const timer = setTimeout(() => {
-        const noteElements = getNoteElements()
-        const svgElement = containerRef.current?.querySelector("svg") ?? null
-        onNoteElementsReady(noteElements, svgElement)
-      }, 100)
-      return () => clearTimeout(timer)
+    // Check ref immediately - if already initialized, skip everything
+    if (!svg || !onNoteElementsReady || noteElementsInitializedRef.current) {
+      return
     }
+
+    // Mark as initialized BEFORE setTimeout to prevent race conditions
+    noteElementsInitializedRef.current = true
+
+    // Slight delay to ensure SVG is rendered in DOM
+    const timer = setTimeout(() => {
+      const noteElements = getNoteElements()
+      const svgElement = containerRef.current?.querySelector("svg") ?? null
+      onNoteElementsReady(noteElements, svgElement)
+    }, 100)
+
+    return () => clearTimeout(timer)
   }, [svg, onNoteElementsReady, getNoteElements])
 
   if (isLoading) {

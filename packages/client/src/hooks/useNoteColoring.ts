@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react"
+import { useCallback, useMemo, useRef } from "react"
 import type { NoteElementInfo } from "./useVerovio.js"
 import type { NoteSubmitResult } from "./useSession.js"
 
@@ -77,6 +77,8 @@ export function useNoteColoring(): UseNoteColoringResult {
     noteMapRef.current.clear()
     colorStateRef.current.clear()
 
+    console.log("[NoteColoring] Initializing with", noteElements.length, "notes")
+
     for (const note of noteElements) {
       const key = makeKey(note.pitch, note.onset)
       noteMapRef.current.set(key, note)
@@ -86,12 +88,16 @@ export function useNoteColoring(): UseNoteColoringResult {
         state: "pending",
       })
     }
+
+    console.log("[NoteColoring] Mapped", noteMapRef.current.size, "notes")
   }, [])
 
   // Process a note result from the server
   const processNoteResult = useCallback((result: NoteSubmitResult) => {
+    console.log("[NoteColoring] Processing result:", result)
     if (result.expectedNoteTime === null) {
       // Extra note - no visual feedback on staff per spec
+      console.log("[NoteColoring] Extra note, skipping")
       return
     }
 
@@ -154,11 +160,12 @@ export function useNoteColoring(): UseNoteColoringResult {
     return new Map(colorStateRef.current)
   }, [])
 
-  return {
+  // Return stable object to prevent re-render loops in consumers
+  return useMemo(() => ({
     initializeNoteMap,
     processNoteResult,
     markMissedNotes,
     resetColors,
     getNoteStates,
-  }
+  }), [initializeNoteMap, processNoteResult, markMissedNotes, resetColors, getNoteStates])
 }

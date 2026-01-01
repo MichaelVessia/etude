@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 
 const SESSION_API = "http://localhost:3001/api/session"
 const PIECE_API = "http://localhost:3001/api/piece"
@@ -248,7 +248,8 @@ export function useSession(): UseSessionResult {
     refreshState()
   }, [refreshState])
 
-  return {
+  // Return memoized object to prevent unnecessary re-renders in consumers
+  return useMemo(() => ({
     isActive,
     isLoading,
     error,
@@ -260,5 +261,5 @@ export function useSession(): UseSessionResult {
     submitNote,
     endSession,
     refreshState,
-  }
+  }), [isActive, isLoading, error, sessionState, lastNoteResult, results, importPiece, startSession, submitNote, endSession, refreshState])
 }
