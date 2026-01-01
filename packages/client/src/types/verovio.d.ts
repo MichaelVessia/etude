@@ -39,6 +39,7 @@ declare module "verovio/esm" {
     getTimeForElement(elementId: string): number
     getElementsAtTime(time: number): ElementsAtTime
     getElementAttr(elementId: string): Record<string, string>
+    getPageWithElement(elementId: string): number
     redoLayout(options?: Record<string, unknown>): void
     edit(editorAction: Record<string, unknown>): boolean
   }

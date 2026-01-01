@@ -35,7 +35,8 @@ interface NotePosition {
 
 export function usePlayhead(
   onTimeUpdate?: (time: number) => void,
-  onEnd?: () => void
+  onEnd?: () => void,
+  onPageChange?: (page: number) => void
 ): UsePlayheadResult {
   const [position, setPosition] = useState<PlayheadPosition | null>(null)
   const [isRunning, setIsRunning] = useState(false)
@@ -50,6 +51,7 @@ export function usePlayhead(
   const lastTimeRef = useRef<number>(0)
   const svgBoundsRef = useRef<DOMRect | null>(null)
   const isRunningRef = useRef(false)
+  const currentPageRef = useRef(1)
 
   // Helper to stop animation (used by animate callback)
   const stopAnimation = useCallback(() => {
@@ -133,6 +135,11 @@ export function usePlayhead(
     const newPosition = getPositionAtTime(adjustedTime)
     if (newPosition) {
       setPosition(newPosition)
+      // Check for page change
+      if (newPosition.page !== currentPageRef.current) {
+        currentPageRef.current = newPosition.page
+        onPageChange?.(newPosition.page)
+      }
     }
 
     // Check if we've reached the end
@@ -148,7 +155,7 @@ export function usePlayhead(
     }
 
     animationRef.current = requestAnimationFrame(animate)
-  }, [getPositionAtTime, onTimeUpdate, onEnd, stopAnimation])
+  }, [getPositionAtTime, onTimeUpdate, onEnd, onPageChange, stopAnimation])
 
   // Start animation loop when running
   useEffect(() => {
@@ -183,7 +190,7 @@ export function usePlayhead(
         x,
         y,
         height,
-        page: 1, // TODO: Handle multi-page
+        page: note.page,
       })
     }
 
@@ -221,6 +228,7 @@ export function usePlayhead(
     stop()
     setCurrentTime(0)
     lastTimeRef.current = 0
+    currentPageRef.current = 1
     const positions = notePositionsRef.current
     if (positions.length > 0) {
       const first = positions[0]!

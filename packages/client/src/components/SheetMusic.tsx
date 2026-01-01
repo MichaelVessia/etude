@@ -10,9 +10,11 @@ interface SheetMusicProps {
   onNoteElementsReady?: (noteElements: NoteElementInfo[], svgElement: SVGElement | null) => void
   playheadPosition?: PlayheadPosition | null
   showPlayhead?: boolean
+  /** Controlled page number (1-indexed). When set, overrides internal page state. */
+  page?: number
 }
 
-export function SheetMusic({ musicXml, scale = 40, onMidiReady, onNoteElementsReady, playheadPosition, showPlayhead = false }: SheetMusicProps) {
+export function SheetMusic({ musicXml, scale = 40, onMidiReady, onNoteElementsReady, playheadPosition, showPlayhead = false, page }: SheetMusicProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const { isReady, isLoading, error, svg, pageCount, currentPage, setPage, loadMusicXml, getMidiBase64, getNoteElements } = useVerovio({
     scale,
@@ -23,6 +25,13 @@ export function SheetMusic({ musicXml, scale = 40, onMidiReady, onNoteElementsRe
       loadMusicXml(musicXml)
     }
   }, [musicXml, isReady, loadMusicXml])
+
+  // Sync controlled page prop with internal state
+  useEffect(() => {
+    if (page !== undefined && page !== currentPage && page >= 1 && page <= pageCount) {
+      setPage(page)
+    }
+  }, [page, currentPage, pageCount, setPage])
 
   // Notify parent when MIDI is ready
   useEffect(() => {

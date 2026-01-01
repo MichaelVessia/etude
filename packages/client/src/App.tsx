@@ -51,6 +51,9 @@ export function App() {
   // Note coloring for visual feedback
   const noteColoring = useNoteColoring()
 
+  // Sheet music page state (for auto page turn)
+  const [sheetMusicPage, setSheetMusicPage] = useState(1)
+
   // Playhead for timing reference
   const svgElementRef = useRef<SVGElement | null>(null)
   const playhead = usePlayhead(
@@ -61,7 +64,9 @@ export function App() {
       if (session.isActive) {
         session.endSession()
       }
-    }
+    },
+    // On page change: update sheet music page
+    (page) => setSheetMusicPage(page)
   )
 
   // Initialize note map and playhead when sheet music loads
@@ -85,6 +90,7 @@ export function App() {
     if (session.isActive) {
       noteColoring.resetColors()
       playhead.reset()
+      setSheetMusicPage(1)
     } else {
       playhead.stop()
     }
@@ -429,6 +435,7 @@ export function App() {
               onNoteElementsReady={handleNoteElementsReady}
               playheadPosition={playhead.position}
               showPlayhead={session.isActive && playhead.isRunning}
+              {...(session.isActive ? { page: sheetMusicPage } : {})}
             />
           </div>
         </div>

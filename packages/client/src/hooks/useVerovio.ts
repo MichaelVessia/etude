@@ -33,6 +33,7 @@ export interface NoteElementInfo {
   pitch: number
   onset: number // milliseconds from piece start
   duration: number
+  page: number // 1-indexed page number
 }
 
 export interface UseVerovioResult {
@@ -49,6 +50,7 @@ export interface UseVerovioResult {
   // Note element mapping for visual feedback
   getNoteElements: () => NoteElementInfo[]
   getTimeForElement: (elementId: string) => number | null
+  getPageForElement: (elementId: string) => number
 }
 
 export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
@@ -162,11 +164,19 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
         try {
           const midiValues = toolkit.getMIDIValuesForElement(elementId)
           if (midiValues) {
+            // Get page number for this element
+            let page = 1
+            try {
+              page = toolkit.getPageWithElement(elementId)
+            } catch {
+              // Default to page 1 if can't determine
+            }
             notes.push({
               elementId,
               pitch: midiValues.pitch,
               onset: midiValues.onset, // Verovio returns onset in milliseconds
               duration: midiValues.duration,
+              page,
             })
           }
         } catch {
@@ -192,6 +202,18 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
     }
   }, [])
 
+  // Get page number for a specific element (1-indexed)
+  const getPageForElement = useCallback((elementId: string): number => {
+    const toolkit = toolkitRef.current
+    if (!toolkit) return 1
+
+    try {
+      return toolkit.getPageWithElement(elementId)
+    } catch {
+      return 1
+    }
+  }, [])
+
   return {
     isReady,
     isLoading,
@@ -205,5 +227,6 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
     getMidiBase64,
     getNoteElements,
     getTimeForElement,
+    getPageForElement,
   }
 }
