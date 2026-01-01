@@ -1,14 +1,19 @@
 import { useVerovio, type NoteElementInfo } from "../hooks/index.js"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
+import { Playhead } from "./Playhead.js"
+import type { PlayheadPosition } from "../hooks/usePlayhead.js"
 
 interface SheetMusicProps {
   musicXml: string | null
   scale?: number
   onMidiReady?: (midiBase64: string | null) => void
-  onNoteElementsReady?: (noteElements: NoteElementInfo[]) => void
+  onNoteElementsReady?: (noteElements: NoteElementInfo[], svgElement: SVGElement | null) => void
+  playheadPosition?: PlayheadPosition | null
+  showPlayhead?: boolean
 }
 
-export function SheetMusic({ musicXml, scale = 40, onMidiReady, onNoteElementsReady }: SheetMusicProps) {
+export function SheetMusic({ musicXml, scale = 40, onMidiReady, onNoteElementsReady, playheadPosition, showPlayhead = false }: SheetMusicProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const { isReady, isLoading, error, svg, pageCount, currentPage, setPage, loadMusicXml, getMidiBase64, getNoteElements } = useVerovio({
     scale,
   })
@@ -32,7 +37,8 @@ export function SheetMusic({ musicXml, scale = 40, onMidiReady, onNoteElementsRe
       // Slight delay to ensure SVG is rendered in DOM
       const timer = setTimeout(() => {
         const noteElements = getNoteElements()
-        onNoteElementsReady(noteElements)
+        const svgElement = containerRef.current?.querySelector("svg") ?? null
+        onNoteElementsReady(noteElements, svgElement)
       }, 100)
       return () => clearTimeout(timer)
     }
@@ -82,9 +88,19 @@ export function SheetMusic({ musicXml, scale = 40, onMidiReady, onNoteElementsRe
         </div>
       )}
       <div
-        dangerouslySetInnerHTML={{ __html: svg }}
-        style={{ background: "#fff", borderRadius: "4px", overflow: "auto" }}
-      />
+        ref={containerRef}
+        style={{ position: "relative", background: "#fff", borderRadius: "4px", overflow: "auto" }}
+      >
+        <div dangerouslySetInnerHTML={{ __html: svg }} />
+        {showPlayhead && playheadPosition && (
+          <Playhead
+            x={playheadPosition.x}
+            y={playheadPosition.y}
+            height={playheadPosition.height}
+            visible={true}
+          />
+        )}
+      </div>
     </div>
   )
 }

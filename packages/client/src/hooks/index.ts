@@ -20,3 +20,6 @@ export type {
 
 export { useNoteColoring } from "./useNoteColoring.js"
 export type { NoteColorState, NoteColorInfo, UseNoteColoringResult } from "./useNoteColoring.js"
+
+export { usePlayhead } from "./usePlayhead.js"
+export type { PlayheadPosition, UsePlayheadResult } from "./usePlayhead.js"

@@ -1,4 +1,4 @@
-import { useMidi, type MidiNoteEvent, useAudio, useSession, useNoteColoring, type NoteElementInfo } from "./hooks/index.js"
+import { useMidi, type MidiNoteEvent, useAudio, useSession, useNoteColoring, usePlayhead, type NoteElementInfo } from "./hooks/index.js"
 import { SheetMusic, AudioPlayer, PieceLibrary } from "./components/index.js"
 import { useCallback, useState, useRef, useEffect } from "react"
 
@@ -51,10 +51,27 @@ export function App() {
   // Note coloring for visual feedback
   const noteColoring = useNoteColoring()
 
-  // Initialize note map when sheet music loads
-  const handleNoteElementsReady = useCallback((noteElements: NoteElementInfo[]) => {
+  // Playhead for timing reference
+  const svgElementRef = useRef<SVGElement | null>(null)
+  const playhead = usePlayhead(
+    // On time update: mark missed notes
+    (time) => noteColoring.markMissedNotes(time),
+    // On end: auto-end session
+    () => {
+      if (session.isActive) {
+        session.endSession()
+      }
+    }
+  )
+
+  // Initialize note map and playhead when sheet music loads
+  const handleNoteElementsReady = useCallback((noteElements: NoteElementInfo[], svgElement: SVGElement | null) => {
     noteColoring.initializeNoteMap(noteElements)
-  }, [noteColoring])
+    svgElementRef.current = svgElement
+    if (svgElement) {
+      playhead.initialize(noteElements, svgElement)
+    }
+  }, [noteColoring, playhead])
 
   // Process note results for coloring
   useEffect(() => {
@@ -63,12 +80,31 @@ export function App() {
     }
   }, [session.lastNoteResult, noteColoring])
 
-  // Reset colors when starting a new session
+  // Reset colors and playhead when starting a new session
   useEffect(() => {
     if (session.isActive) {
       noteColoring.resetColors()
+      playhead.reset()
+    } else {
+      playhead.stop()
     }
-  }, [session.isActive, noteColoring])
+  }, [session.isActive, noteColoring, playhead])
+
+  // Track whether we've started the playhead for this session
+  const playheadStartedRef = useRef(false)
+
+  // Start playhead on first note
+  useEffect(() => {
+    if (session.isActive && session.lastNoteResult && !playheadStartedRef.current) {
+      if (session.lastNoteResult.result === "correct") {
+        playheadStartedRef.current = true
+        playhead.start(session.sessionState?.tempo ?? 100)
+      }
+    }
+    if (!session.isActive) {
+      playheadStartedRef.current = false
+    }
+  }, [session.isActive, session.lastNoteResult, session.sessionState?.tempo, playhead])
 
   const handleNote = useCallback(
     (event: MidiNoteEvent) => {
@@ -405,7 +441,14 @@ export function App() {
             )}
           </div>
           <div style={{ flex: 1 }}>
-            <SheetMusic musicXml={musicXml} scale={35} onMidiReady={setMidiBase64} onNoteElementsReady={handleNoteElementsReady} />
+            <SheetMusic
+              musicXml={musicXml}
+              scale={35}
+              onMidiReady={setMidiBase64}
+              onNoteElementsReady={handleNoteElementsReady}
+              playheadPosition={playhead.position}
+              showPlayhead={session.isActive && playhead.isRunning}
+            />
           </div>
         </div>
       </section>
