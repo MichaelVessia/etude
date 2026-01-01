@@ -344,6 +344,49 @@ describe("SessionService", () => {
       }).pipe(Effect.provide(TestLayer))
     )
 
+    it.effect("aligns timing when user starts late", () =>
+      Effect.gen(function* () {
+        yield* setupTables
+        yield* clearTables
+
+        const pieceRepo = yield* PieceRepo
+        const sessionService = yield* SessionService
+
+        const notesJson = JSON.stringify([
+          { pitch: 60, startTime: 0, duration: 500, measure: 1, hand: "right" },
+          {
+            pitch: 62,
+            startTime: 500,
+            duration: 500,
+            measure: 1,
+            hand: "right",
+          },
+        ])
+
+        const piece = yield* pieceRepo.create({
+          name: "Test Piece",
+          composer: null,
+          filePath: "/test.xml",
+          totalMeasures: 1,
+          difficulty: null,
+          notesJson,
+        })
+
+        yield* sessionService.startSession(piece.id, 1, 1, "both", 100)
+
+        // User waits 5 seconds before playing (5000ms offset)
+        // But plays the notes with correct relative timing
+        yield* sessionService.submitNote(60, 80, 5000, true)
+        yield* sessionService.submitNote(62, 80, 5500, true)
+
+        const result = yield* sessionService.endSession()
+
+        // Should still get perfect score because relative timing is correct
+        expect(result.noteAccuracy).toBe(1)
+        expect(result.combinedScore).toBe(100)
+      }).pipe(Effect.provide(TestLayer))
+    )
+
     it.effect("clears session state after ending", () =>
       Effect.gen(function* () {
         yield* setupTables

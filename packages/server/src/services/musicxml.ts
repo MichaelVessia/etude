@@ -169,14 +169,21 @@ export const MusicXmlServiceLive = Layer.succeed(
             }
           }
 
-          // Check for tempo in direction
+          // Check for tempo in direction (sound element or metronome)
           const directions = measure["direction"] as unknown[] | undefined
           if (directions) {
             for (const dir of directions) {
               const d = dir as Record<string, unknown>
+              // Check sound element for tempo attribute
               const sound = d["sound"] as Record<string, unknown> | undefined
               if (sound?.["@_tempo"]) {
                 tempo = Number(sound["@_tempo"])
+              }
+              // Check metronome element for per-minute
+              const dirType = d["direction-type"] as Record<string, unknown> | undefined
+              const metronome = dirType?.["metronome"] as Record<string, unknown> | undefined
+              if (metronome?.["per-minute"]) {
+                tempo = Number(metronome["per-minute"])
               }
             }
           }

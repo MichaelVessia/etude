@@ -28,6 +28,7 @@ export interface SessionState {
   hand: Hand
   tempo: number
   startTime: number // timestamp when session started
+  firstNoteOffset: number | null // offset to align played notes with expected notes
 }
 
 export interface SessionStartResult {
@@ -200,6 +201,7 @@ export const SessionServiceLive = Layer.effect(
             hand,
             tempo,
             startTime: Date.now(),
+            firstNoteOffset: null,
           }
 
           yield* Ref.set(sessionRef, state)
@@ -233,9 +235,26 @@ export const SessionServiceLive = Layer.effect(
             }
           }
 
+          // Calculate timing offset on first note to align with expected notes
+          // This allows the user to start playing whenever they're ready
+          let firstNoteOffset = state.firstNoteOffset
+          if (firstNoteOffset === null && state.expectedNotes.length > 0) {
+            // Align to the first expected note (time 0)
+            // This means: when user plays first note, that becomes time 0
+            firstNoteOffset = timestamp
+            yield* Effect.logDebug(`First note played at ${timestamp}ms, setting offset to ${firstNoteOffset}`)
+            yield* Ref.update(sessionRef, (s) =>
+              s ? { ...s, firstNoteOffset } : null
+            )
+          }
+
+          // Adjust timestamp by the offset so played notes align with expected
+          const adjustedTimestamp = timestamp - (firstNoteOffset ?? 0)
+          yield* Effect.logDebug(`Note pitch=${pitch} timestamp=${timestamp} adjusted=${adjustedTimestamp} offset=${firstNoteOffset}`)
+
           const playedNote = new PlayedNote({
             pitch: pitch as MidiPitch,
-            timestamp: timestamp as Milliseconds,
+            timestamp: adjustedTimestamp as Milliseconds,
             velocity: velocity as Velocity,
             duration: Option.none(),
           })
@@ -272,12 +291,17 @@ export const SessionServiceLive = Layer.effect(
             return yield* new SessionError({ reason: "NotStarted" })
           }
 
+          yield* Effect.logDebug(`End session - expected notes: ${JSON.stringify(state.expectedNotes.map(n => ({ pitch: n.pitch, time: n.startTime })))}`)
+          yield* Effect.logDebug(`End session - played notes: ${JSON.stringify(state.playedNotes.map(n => ({ pitch: n.pitch, time: n.timestamp })))}`)
+          yield* Effect.logDebug(`End session - firstNoteOffset: ${state.firstNoteOffset}`)
+
           // Calculate final scores using comparison service
           const comparisonResult = yield* comparisonService.compare(
             state.expectedNotes,
             state.playedNotes,
             state.hand
           )
+          yield* Effect.logDebug(`Comparison result: noteAcc=${comparisonResult.noteAccuracy} timingAcc=${comparisonResult.timingAccuracy} combined=${comparisonResult.combinedScore}`)
 
           // Save attempt to database
           const attempt = yield* attemptRepo.create({

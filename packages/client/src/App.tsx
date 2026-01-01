@@ -10,6 +10,33 @@ function pitchToNote(pitch: number): string {
   return `${note}${octave}`
 }
 
+// Clean up MIDI device name for display
+function formatDeviceName(name: string, manufacturer: string): string {
+  // Remove common USB/MIDI prefixes
+  let cleanName = name
+    .replace(/^USB func for MIDI\s*/i, "")
+    .replace(/^MIDI\s*/i, "")
+    .replace(/\s*MIDI\s*(IN|OUT)\s*\d*/gi, "")
+    .trim()
+
+  // Clean up manufacturer
+  const cleanMfg = manufacturer
+    .replace(/\s*(MI\.|Mfg\.|Co\.|Ltd\.|Inc\.|Corp\.)+/gi, "")
+    .trim()
+
+  // If name is empty after cleaning, use manufacturer
+  if (!cleanName || cleanName === "Unknown") {
+    return cleanMfg || manufacturer || name
+  }
+
+  // If manufacturer adds value, append it
+  if (cleanMfg && !cleanName.toLowerCase().includes(cleanMfg.toLowerCase())) {
+    return `${cleanName} (${cleanMfg})`
+  }
+
+  return cleanName
+}
+
 export function App() {
   const [noteHistory, setNoteHistory] = useState<MidiNoteEvent[]>([])
   const [musicXml, setMusicXml] = useState<string | null>(null)
@@ -23,15 +50,18 @@ export function App() {
 
   const handleNote = useCallback(
     (event: MidiNoteEvent) => {
-      setNoteHistory((prev) => [...prev.slice(-19), event])
+      // Only show note-on events in history
+      if (event.on) {
+        setNoteHistory((prev) => [...prev.slice(-19), event])
+      }
 
       // Play the note through the audio engine
       if (event.on && audioReady) {
         playNote(event.pitch, 0.3)
       }
 
-      // Submit note to session if active
-      if (session.isActive) {
+      // Submit note-on events to session if active
+      if (session.isActive && event.on) {
         session.submitNote(event.pitch, event.velocity, event.on)
       }
     },
@@ -139,7 +169,7 @@ export function App() {
               <option value="">Select a device...</option>
               {midi.devices.map((device) => (
                 <option key={device.id} value={device.id}>
-                  {device.name} ({device.manufacturer})
+                  {formatDeviceName(device.name, device.manufacturer)}
                 </option>
               ))}
             </select>
@@ -261,7 +291,7 @@ export function App() {
               </div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#7c3aed" }}>
-                  {Math.round(session.results.combinedScore * 100)}%
+                  {Math.round(session.results.combinedScore)}%
                 </div>
                 <div style={{ color: "#666" }}>Overall</div>
               </div>
