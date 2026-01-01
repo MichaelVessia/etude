@@ -363,45 +363,26 @@ export function App() {
         )}
       </section>
 
-      {/* Note Display */}
-      <section style={{ marginTop: "1rem", display: "flex", gap: "1rem" }}>
-        <div style={{ flex: 1, padding: "1rem", background: "#f9fafb", borderRadius: "8px" }}>
-          <h2 style={{ margin: "0 0 0.5rem 0" }}>Last Note</h2>
-          {midi.lastNote ? (
-            <div
-              style={{
-                fontSize: "3rem",
-                fontWeight: "bold",
-                color: midi.lastNote.on ? "#2563eb" : "#666",
-              }}
-            >
-              {pitchToNote(midi.lastNote.pitch)}
-            </div>
+      {/* Note History */}
+      <section style={{ marginTop: "1rem", padding: "1rem", background: "#f9fafb", borderRadius: "8px" }}>
+        <h2 style={{ margin: "0 0 0.5rem 0" }}>Note History</h2>
+        <div
+          style={{
+            fontFamily: "monospace",
+            fontSize: "0.75rem",
+            maxHeight: "100px",
+            overflow: "auto",
+          }}
+        >
+          {noteHistory.length === 0 ? (
+            <span style={{ color: "#666" }}>No notes yet...</span>
           ) : (
-            <p style={{ color: "#666" }}>Play a note...</p>
+            noteHistory.map((note, i) => (
+              <span key={i} style={{ color: note.on ? "#16a34a" : "#999", marginRight: "0.5rem" }}>
+                {pitchToNote(note.pitch)}
+              </span>
+            ))
           )}
-        </div>
-
-        <div style={{ flex: 2, padding: "1rem", background: "#f9fafb", borderRadius: "8px" }}>
-          <h2 style={{ margin: "0 0 0.5rem 0" }}>Note History</h2>
-          <div
-            style={{
-              fontFamily: "monospace",
-              fontSize: "0.75rem",
-              maxHeight: "100px",
-              overflow: "auto",
-            }}
-          >
-            {noteHistory.length === 0 ? (
-              <span style={{ color: "#666" }}>No notes yet...</span>
-            ) : (
-              noteHistory.map((note, i) => (
-                <span key={i} style={{ color: note.on ? "#16a34a" : "#999", marginRight: "0.5rem" }}>
-                  {pitchToNote(note.pitch)}
-                </span>
-              ))
-            )}
-          </div>
         </div>
       </section>
 
