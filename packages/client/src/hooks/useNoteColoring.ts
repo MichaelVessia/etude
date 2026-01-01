@@ -54,19 +54,26 @@ export function useNoteColoring(): UseNoteColoringResult {
 
     // Find the note element by ID
     const noteElement = document.getElementById(elementId)
-    if (!noteElement) return
-
-    // Find and color the notehead (usually a path or use element inside)
-    const notehead = noteElement.querySelector('.notehead, use, path')
-    if (notehead) {
-      ;(notehead as SVGElement).style.fill = color
+    if (!noteElement) {
+      console.log("[NoteColoring] Element not found:", elementId)
+      return
     }
 
-    // Also color the stem if present
-    const stem = noteElement.querySelector('.stem')
-    if (stem) {
-      ;(stem as SVGElement).style.stroke = color
-    }
+    console.log("[NoteColoring] Applying color", color, "to element", elementId)
+    console.log("[NoteColoring] Element children:", noteElement.innerHTML.slice(0, 200))
+
+    // Verovio note elements - color all child elements
+    const children = noteElement.querySelectorAll('*')
+    children.forEach((child) => {
+      const svgChild = child as SVGElement
+      if (svgChild.style) {
+        svgChild.style.fill = color
+        svgChild.style.stroke = color
+      }
+    })
+
+    // Also try to color the element itself
+    ;(noteElement as unknown as SVGElement).style.fill = color
 
     // Update our state tracking
     colorStateRef.current.set(elementId, { elementId, state })
@@ -124,15 +131,24 @@ export function useNoteColoring(): UseNoteColoringResult {
     const noteInfo = noteMapRef.current.get(key)
 
     if (noteInfo) {
+      console.log("[NoteColoring] Found exact match for key:", key)
       applyColor(noteInfo.elementId, state)
     } else {
-      // Try nearby times (±20ms) in case of rounding differences
+      // Server times may differ from Verovio times - use wider tolerance (±200ms)
+      console.log("[NoteColoring] No exact match for key:", key, "- searching with tolerance")
+      let found = false
       for (const [k, info] of noteMapRef.current) {
         const [p, t] = k.split("-").map(Number)
-        if (p === result.pitch && Math.abs(t! - result.expectedNoteTime) <= 20) {
+        if (p === result.pitch && Math.abs(t! - result.expectedNoteTime) <= 200) {
+          console.log("[NoteColoring] Found fuzzy match:", k, "for expectedTime:", result.expectedNoteTime)
           applyColor(info.elementId, state)
+          found = true
           break
         }
+      }
+      if (!found) {
+        console.log("[NoteColoring] No match found. Available keys for pitch", result.pitch, ":",
+          Array.from(noteMapRef.current.keys()).filter(k => k.startsWith(`${result.pitch}-`)))
       }
     }
   }, [applyColor])

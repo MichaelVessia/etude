@@ -177,6 +177,10 @@ export function usePlayhead(
 
     console.log("[Playhead] Initializing with", noteElements.length, "notes")
 
+    // Calculate full staff height (min Y to max Y+height of all notes)
+    let minY = Infinity
+    let maxY = 0
+
     for (const note of noteElements) {
       const el = document.getElementById(note.elementId)
       if (!el) {
@@ -190,6 +194,10 @@ export function usePlayhead(
       const y = bounds.top - svgBounds.top
       const height = bounds.height
 
+      // Track vertical extent
+      minY = Math.min(minY, y)
+      maxY = Math.max(maxY, y + height)
+
       positions.push({
         time: note.onset,
         x,
@@ -199,11 +207,22 @@ export function usePlayhead(
       })
     }
 
+    // Calculate fixed Y and height to span all notes
+    const fixedY = minY === Infinity ? 0 : minY
+    const fixedHeight = maxY > minY ? maxY - minY : 100
+
+    // Update positions to use consistent Y/height (playhead spans full staff)
+    for (const pos of positions) {
+      pos.y = fixedY
+      pos.height = fixedHeight
+    }
+
     // Sort by time
     positions.sort((a, b) => a.time - b.time)
     notePositionsRef.current = positions
 
     console.log("[Playhead] Found", positions.length, "note positions")
+    console.log("[Playhead] Fixed Y:", fixedY, "Height:", fixedHeight)
     if (positions.length > 0) {
       console.log("[Playhead] First position:", positions[0])
     }

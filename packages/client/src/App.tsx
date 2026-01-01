@@ -1,4 +1,5 @@
 import { useMidi, type MidiNoteEvent, useAudio, useSession, useNoteColoring, usePlayhead, type NoteElementInfo } from "./hooks/index.js"
+import type { MidiPitch, Velocity, Milliseconds } from "@etude/shared"
 import { SheetMusic, AudioPlayer, PieceLibrary } from "./components/index.js"
 import { useCallback, useState, useRef, useEffect } from "react"
 
@@ -54,16 +55,22 @@ export function App() {
   // Sheet music page state (for auto page turn)
   const [sheetMusicPage, setSheetMusicPage] = useState(1)
 
-  // Memoized callbacks for playhead
+  // Store methods in refs to avoid effect re-triggers
+  const noteColoringRef = useRef(noteColoring)
+  noteColoringRef.current = noteColoring
+  const sessionRef = useRef(session)
+  sessionRef.current = session
+
+  // Memoized callbacks for playhead (use refs for methods)
   const handlePlayheadTimeUpdate = useCallback(
-    (time: number) => noteColoring.markMissedNotes(time),
-    [noteColoring]
+    (time: number) => noteColoringRef.current.markMissedNotes(time),
+    []
   )
   const handlePlayheadEnd = useCallback(() => {
-    if (session.isActive) {
-      session.endSession()
+    if (sessionRef.current.isActive) {
+      sessionRef.current.endSession()
     }
-  }, [session])
+  }, [])
   const handlePlayheadPageChange = useCallback(
     (page: number) => setSheetMusicPage(page),
     []
@@ -76,33 +83,35 @@ export function App() {
     handlePlayheadEnd,
     handlePlayheadPageChange
   )
+  const playheadRef = useRef(playhead)
+  playheadRef.current = playhead
 
   // Initialize note map and playhead when sheet music loads
   const handleNoteElementsReady = useCallback((noteElements: NoteElementInfo[], svgElement: SVGElement | null) => {
-    noteColoring.initializeNoteMap(noteElements)
+    noteColoringRef.current.initializeNoteMap(noteElements)
     svgElementRef.current = svgElement
     if (svgElement) {
-      playhead.initialize(noteElements, svgElement)
+      playheadRef.current.initialize(noteElements, svgElement)
     }
-  }, [noteColoring, playhead])
+  }, [])
 
   // Process note results for coloring
   useEffect(() => {
     if (session.lastNoteResult) {
-      noteColoring.processNoteResult(session.lastNoteResult)
+      noteColoringRef.current.processNoteResult(session.lastNoteResult)
     }
-  }, [session.lastNoteResult, noteColoring])
+  }, [session.lastNoteResult])
 
   // Reset colors and playhead when starting a new session
   useEffect(() => {
     if (session.isActive) {
-      noteColoring.resetColors()
-      playhead.reset()
+      noteColoringRef.current.resetColors()
+      playheadRef.current.reset()
       setSheetMusicPage(1)
     } else {
-      playhead.stop()
+      playheadRef.current.stop()
     }
-  }, [session.isActive, noteColoring, playhead])
+  }, [session.isActive])
 
   // Track whether we've started the playhead for this session
   const playheadStartedRef = useRef(false)
@@ -112,13 +121,13 @@ export function App() {
     if (session.isActive && session.lastNoteResult && !playheadStartedRef.current) {
       if (session.lastNoteResult.result === "correct") {
         playheadStartedRef.current = true
-        playhead.start(session.sessionState?.tempo ?? 100)
+        playheadRef.current.start(session.sessionState?.tempo ?? 100)
       }
     }
     if (!session.isActive) {
       playheadStartedRef.current = false
     }
-  }, [session.isActive, session.lastNoteResult, session.sessionState?.tempo, playhead])
+  }, [session.isActive, session.lastNoteResult, session.sessionState?.tempo])
 
   const handleNote = useCallback(
     (event: MidiNoteEvent) => {
@@ -133,11 +142,11 @@ export function App() {
       }
 
       // Submit note-on events to session if active
-      if (session.isActive && event.on) {
-        session.submitNote(event.pitch, event.velocity, event.on)
+      if (sessionRef.current.isActive && event.on) {
+        sessionRef.current.submitNote(event.pitch, event.velocity, event.on)
       }
     },
-    [audioReady, playNote, session]
+    [audioReady, playNote]
   )
 
   const midi = useMidi(handleNote)
@@ -169,7 +178,7 @@ export function App() {
     }
 
     // Import the piece first (will return existing if already imported)
-    const importResult = await session.importPiece({
+    const importResult = await sessionRef.current.importPiece({
       id: selectedPieceId,
       xml: musicXml,
       filePath: selectedPieceId,
@@ -179,18 +188,18 @@ export function App() {
       return // Error already set by importPiece
     }
 
-    await session.startSession({
+    await sessionRef.current.startSession({
       pieceId: importResult.id,
       measureStart: 1,
       measureEnd: importResult.totalMeasures,
       hand: "both",
       tempo: 100,
     })
-  }, [selectedPieceId, musicXml, session])
+  }, [selectedPieceId, musicXml])
 
   const handleEndSession = useCallback(async () => {
-    await session.endSession()
-  }, [session])
+    await sessionRef.current.endSession()
+  }, [])
 
   // Get result color based on note result
   const getResultColor = (result: "correct" | "wrong" | "extra") => {
@@ -224,6 +233,32 @@ export function App() {
         <div style={{ color: "red", padding: "1rem", background: "#fee", borderRadius: "4px", marginBottom: "1rem" }}>
           Session Error: {session.error}
         </div>
+      )}
+
+      {/* Dev: MIDI Simulator (for testing without hardware) */}
+      {import.meta.env.DEV && (
+        <section style={{ marginTop: "1rem", padding: "1rem", background: "#fef3c7", borderRadius: "8px" }}>
+          <h2 style={{ margin: "0 0 0.5rem 0", fontSize: "0.875rem" }}>🧪 MIDI Simulator (Dev Only)</h2>
+          <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+            {/* Simple octave of white keys C4-B4 */}
+            {[60, 62, 64, 65, 67, 69, 71, 72].map((pitch) => (
+              <button
+                key={pitch}
+                onClick={() => handleNote({ pitch: pitch as MidiPitch, velocity: 100 as Velocity, timestamp: 0 as Milliseconds, on: true })}
+                style={{
+                  padding: "0.5rem",
+                  minWidth: "2.5rem",
+                  background: "#fff",
+                  border: "1px solid #ccc",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                {pitchToNote(pitch)}
+              </button>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* MIDI Device Selection */}

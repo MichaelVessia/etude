@@ -16,10 +16,10 @@ export function Playhead({ x, y, height, visible }: PlayheadProps) {
         top: `${y}px`,
         width: "2px",
         height: `${height}px`,
-        backgroundColor: "rgba(37, 99, 235, 0.6)", // blue-600 with 60% opacity
+        backgroundColor: "rgba(37, 99, 235, 0.8)", // blue-600 with 80% opacity
         pointerEvents: "none",
         zIndex: 10,
-        transition: "left 16ms linear", // Smooth sub-frame interpolation
+        // No transition - RAF handles smooth animation
       }}
     />
   )
