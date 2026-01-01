@@ -17,3 +17,6 @@ export type {
   SessionState,
   UseSessionResult,
 } from "./useSession.js"
+
+export { useNoteColoring } from "./useNoteColoring.js"
+export type { NoteColorState, NoteColorInfo, UseNoteColoringResult } from "./useNoteColoring.js"

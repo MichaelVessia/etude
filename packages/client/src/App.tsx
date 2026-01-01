@@ -1,6 +1,6 @@
-import { useMidi, type MidiNoteEvent, useAudio, useSession } from "./hooks/index.js"
+import { useMidi, type MidiNoteEvent, useAudio, useSession, useNoteColoring, type NoteElementInfo } from "./hooks/index.js"
 import { SheetMusic, AudioPlayer, PieceLibrary } from "./components/index.js"
-import { useCallback, useState, useRef } from "react"
+import { useCallback, useState, useRef, useEffect } from "react"
 
 // Convert MIDI pitch to note name
 function pitchToNote(pitch: number): string {
@@ -47,6 +47,28 @@ export function App() {
 
   // Session management
   const session = useSession()
+
+  // Note coloring for visual feedback
+  const noteColoring = useNoteColoring()
+
+  // Initialize note map when sheet music loads
+  const handleNoteElementsReady = useCallback((noteElements: NoteElementInfo[]) => {
+    noteColoring.initializeNoteMap(noteElements)
+  }, [noteColoring])
+
+  // Process note results for coloring
+  useEffect(() => {
+    if (session.lastNoteResult) {
+      noteColoring.processNoteResult(session.lastNoteResult)
+    }
+  }, [session.lastNoteResult, noteColoring])
+
+  // Reset colors when starting a new session
+  useEffect(() => {
+    if (session.isActive) {
+      noteColoring.resetColors()
+    }
+  }, [session.isActive, noteColoring])
 
   const handleNote = useCallback(
     (event: MidiNoteEvent) => {
@@ -383,7 +405,7 @@ export function App() {
             )}
           </div>
           <div style={{ flex: 1 }}>
-            <SheetMusic musicXml={musicXml} scale={35} onMidiReady={setMidiBase64} />
+            <SheetMusic musicXml={musicXml} scale={35} onMidiReady={setMidiBase64} onNoteElementsReady={handleNoteElementsReady} />
           </div>
         </div>
       </section>

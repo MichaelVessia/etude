@@ -1,14 +1,15 @@
-import { useVerovio } from "../hooks/index.js"
+import { useVerovio, type NoteElementInfo } from "../hooks/index.js"
 import { useEffect } from "react"
 
 interface SheetMusicProps {
   musicXml: string | null
   scale?: number
   onMidiReady?: (midiBase64: string | null) => void
+  onNoteElementsReady?: (noteElements: NoteElementInfo[]) => void
 }
 
-export function SheetMusic({ musicXml, scale = 40, onMidiReady }: SheetMusicProps) {
-  const { isReady, isLoading, error, svg, pageCount, currentPage, setPage, loadMusicXml, getMidiBase64 } = useVerovio({
+export function SheetMusic({ musicXml, scale = 40, onMidiReady, onNoteElementsReady }: SheetMusicProps) {
+  const { isReady, isLoading, error, svg, pageCount, currentPage, setPage, loadMusicXml, getMidiBase64, getNoteElements } = useVerovio({
     scale,
   })
 
@@ -24,6 +25,18 @@ export function SheetMusic({ musicXml, scale = 40, onMidiReady }: SheetMusicProp
       onMidiReady(getMidiBase64())
     }
   }, [svg, onMidiReady, getMidiBase64])
+
+  // Notify parent when note elements are ready for coloring
+  useEffect(() => {
+    if (svg && onNoteElementsReady) {
+      // Slight delay to ensure SVG is rendered in DOM
+      const timer = setTimeout(() => {
+        const noteElements = getNoteElements()
+        onNoteElementsReady(noteElements)
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [svg, onNoteElementsReady, getNoteElements])
 
   if (isLoading) {
     return <div style={{ padding: "1rem", color: "#666" }}>Loading Verovio...</div>
