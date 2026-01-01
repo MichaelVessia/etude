@@ -241,6 +241,8 @@
   position: relative;
   z-index: 1;
   background: var(--color-bg-elevated);
+  padding-top: var(--space-2);
+  margin-top: var(--space-4);
 }
 
 .pieceTitle {
