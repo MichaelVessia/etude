@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react"
 
-const API_BASE = "http://localhost:3001/api/session"
+const SESSION_API = "http://localhost:3001/api/session"
+const PIECE_API = "http://localhost:3001/api/piece"
 
 export type Hand = "left" | "right" | "both"
 
@@ -47,6 +48,20 @@ export interface SessionState {
   tempo?: number
 }
 
+export interface ImportPieceParams {
+  id: string
+  xml: string
+  filePath: string
+}
+
+export interface ImportPieceResult {
+  id: string
+  name: string
+  totalMeasures: number
+  noteCount?: number
+  alreadyExists?: boolean
+}
+
 export interface UseSessionResult {
   isActive: boolean
   isLoading: boolean
@@ -54,6 +69,7 @@ export interface UseSessionResult {
   sessionState: SessionState | null
   lastNoteResult: NoteSubmitResult | null
   results: SessionEndResult | null
+  importPiece: (params: ImportPieceParams) => Promise<ImportPieceResult | null>
   startSession: (params: SessionStartParams) => Promise<SessionStartResult | null>
   submitNote: (pitch: number, velocity: number, on: boolean) => Promise<NoteSubmitResult | null>
   endSession: () => Promise<SessionEndResult | null>
@@ -69,6 +85,27 @@ export function useSession(): UseSessionResult {
   const [results, setResults] = useState<SessionEndResult | null>(null)
   const sessionStartTime = useRef<number>(0)
 
+  const importPiece = useCallback(async (params: ImportPieceParams): Promise<ImportPieceResult | null> => {
+    try {
+      const response = await fetch(`${PIECE_API}/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to import piece")
+      }
+
+      return data as ImportPieceResult
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error")
+      return null
+    }
+  }, [])
+
   const startSession = useCallback(async (params: SessionStartParams): Promise<SessionStartResult | null> => {
     setIsLoading(true)
     setError(null)
@@ -76,7 +113,7 @@ export function useSession(): UseSessionResult {
     setLastNoteResult(null)
 
     try {
-      const response = await fetch(`${API_BASE}/start`, {
+      const response = await fetch(`${SESSION_API}/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
@@ -122,7 +159,7 @@ export function useSession(): UseSessionResult {
     const timestamp = Date.now() - sessionStartTime.current
 
     try {
-      const response = await fetch(`${API_BASE}/note`, {
+      const response = await fetch(`${SESSION_API}/note`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pitch, velocity, timestamp, on }),
@@ -166,7 +203,7 @@ export function useSession(): UseSessionResult {
     setIsLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE}/end`, {
+      const response = await fetch(`${SESSION_API}/end`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       })
@@ -193,7 +230,7 @@ export function useSession(): UseSessionResult {
 
   const refreshState = useCallback(async (): Promise<void> => {
     try {
-      const response = await fetch(`${API_BASE}/state`)
+      const response = await fetch(`${SESSION_API}/state`)
       const data = await response.json()
 
       if (response.ok) {
@@ -217,6 +254,7 @@ export function useSession(): UseSessionResult {
     sessionState,
     lastNoteResult,
     results,
+    importPiece,
     startSession,
     submitNote,
     endSession,

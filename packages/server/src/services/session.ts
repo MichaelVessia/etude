@@ -88,6 +88,29 @@ function filterNotesByMeasures(
   )
 }
 
+// Convert serialized Option from JSON back to actual Option
+function deserializeOption<T>(value: unknown): Option.Option<T> {
+  if (value === null || value === undefined) {
+    return Option.none()
+  }
+  // Check if it's a serialized Option from JSON
+  if (typeof value === "object" && value !== null && "_tag" in value) {
+    const obj = value as { _tag: string; value?: T }
+    if (obj._tag === "None") {
+      return Option.none()
+    }
+    if (obj._tag === "Some" && "value" in obj) {
+      return Option.some(obj.value as T)
+    }
+  }
+  // If it's already an Option instance, return as-is
+  if (Option.isOption(value)) {
+    return value as Option.Option<T>
+  }
+  // Otherwise treat as a raw value
+  return Option.some(value as T)
+}
+
 // Adjust note timing relative to measure start
 // tempo is a percentage: 100 = normal speed, 50 = half speed, 200 = double speed
 function adjustNoteTiming(
@@ -110,7 +133,7 @@ function adjustNoteTiming(
         duration: (n.duration * tempoRatio) as Milliseconds,
         measure: n.measure,
         hand: n.hand,
-        voice: n.voice ?? Option.none(),
+        voice: deserializeOption<number>(n.voice),
       })
   )
 }

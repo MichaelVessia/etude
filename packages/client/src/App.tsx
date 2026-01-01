@@ -55,27 +55,36 @@ export function App() {
     reader.readAsText(file)
   }, [])
 
-  const handlePieceSelect = useCallback((xml: string) => {
+  const handlePieceSelect = useCallback((xml: string, filePath: string) => {
     setMusicXml(xml)
-    // For now, use a simple hash of the XML as piece ID
-    // In a real app, pieces would be stored in the database
-    setSelectedPieceId(`piece-${xml.length}`)
+    setSelectedPieceId(filePath)
   }, [])
 
   const handleStartSession = useCallback(async () => {
-    if (!selectedPieceId) {
+    if (!selectedPieceId || !musicXml) {
       alert("Please select a piece first")
       return
     }
 
+    // Import the piece first (will return existing if already imported)
+    const importResult = await session.importPiece({
+      id: selectedPieceId,
+      xml: musicXml,
+      filePath: selectedPieceId,
+    })
+
+    if (!importResult) {
+      return // Error already set by importPiece
+    }
+
     await session.startSession({
-      pieceId: selectedPieceId,
+      pieceId: importResult.id,
       measureStart: 1,
-      measureEnd: 10, // TODO: make configurable
+      measureEnd: importResult.totalMeasures,
       hand: "both",
       tempo: 100,
     })
-  }, [selectedPieceId, session])
+  }, [selectedPieceId, musicXml, session])
 
   const handleEndSession = useCallback(async () => {
     await session.endSession()

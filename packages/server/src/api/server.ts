@@ -9,10 +9,12 @@ import {
 import { BunHttpServer } from "@effect/platform-bun"
 import { SessionServiceLive } from "../services/session.js"
 import { ComparisonServiceLive } from "../services/comparison.js"
+import { MusicXmlServiceLive } from "../services/musicxml.js"
 import { PieceRepoLive } from "../repos/piece-repo.js"
 import { AttemptRepoLive } from "../repos/attempt-repo.js"
 import { SqlLive } from "../sql.js"
 import { sessionRoutes } from "./routes/session.js"
+import { pieceRoutes } from "./routes/piece.js"
 
 const PORT = 3001
 
@@ -28,7 +30,7 @@ const SessionLayer = pipe(
   Layer.provide(ComparisonServiceLive)
 )
 
-const ServiceLayer = Layer.merge(SessionLayer, ComparisonServiceLive)
+const ServiceLayer = Layer.mergeAll(SessionLayer, ComparisonServiceLive, MusicXmlServiceLive, RepoLayer)
 
 // Add CORS headers to all responses
 const addCorsHeaders = <E, R>(app: HttpApp.Default<E, R>): HttpApp.Default<E, R> =>
@@ -55,7 +57,8 @@ const addCorsHeaders = <E, R>(app: HttpApp.Default<E, R>): HttpApp.Default<E, R>
 // Build router with all routes
 const router = HttpRouter.empty.pipe(
   HttpRouter.get("/health", HttpServerResponse.text("ok")),
-  HttpRouter.mount("/api/session", sessionRoutes)
+  HttpRouter.mount("/api/session", sessionRoutes),
+  HttpRouter.mount("/api/piece", pieceRoutes)
 )
 
 // Apply CORS to router

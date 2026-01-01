@@ -14,7 +14,7 @@ const bundledPieces: PieceInfo[] = [
 ]
 
 interface PieceLibraryProps {
-  onSelect: (musicXml: string) => void
+  onSelect: (musicXml: string, filePath: string) => void
 }
 
 export function PieceLibrary({ onSelect }: PieceLibraryProps) {
@@ -31,7 +31,7 @@ export function PieceLibrary({ onSelect }: PieceLibraryProps) {
         throw new Error(`Failed to load: ${response.statusText}`)
       }
       const xml = await response.text()
-      onSelect(xml)
+      onSelect(xml, piece.path)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load piece")
     } finally {
