@@ -28,6 +28,13 @@ const defaultOptions: VerovioOptions = {
   adjustPageWidth: false,
 }
 
+export interface NoteElementInfo {
+  elementId: string
+  pitch: number
+  onset: number // milliseconds from piece start
+  duration: number
+}
+
 export interface UseVerovioResult {
   isReady: boolean
   isLoading: boolean
@@ -39,6 +46,9 @@ export interface UseVerovioResult {
   loadMusicXml: (xml: string) => void
   setOptions: (options: VerovioOptions) => void
   getMidiBase64: () => string | null
+  // Note element mapping for visual feedback
+  getNoteElements: () => NoteElementInfo[]
+  getTimeForElement: (elementId: string) => number | null
 }
 
 export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
@@ -134,6 +144,54 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
     }
   }, [])
 
+  // Get all note elements with their MIDI values
+  // Parses the SVG to find note IDs and queries Verovio for timing info
+  const getNoteElements = useCallback((): NoteElementInfo[] => {
+    const toolkit = toolkitRef.current
+    if (!toolkit || !svg) return []
+
+    try {
+      // Parse SVG to find all note elements (they have IDs starting with "note-")
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(svg, "image/svg+xml")
+      const noteElements = doc.querySelectorAll('[id^="note-"]')
+
+      const notes: NoteElementInfo[] = []
+      noteElements.forEach((el) => {
+        const elementId = el.id
+        try {
+          const midiValues = toolkit.getMIDIValuesForElement(elementId)
+          if (midiValues) {
+            notes.push({
+              elementId,
+              pitch: midiValues.pitch,
+              onset: midiValues.onset, // Verovio returns onset in milliseconds
+              duration: midiValues.duration,
+            })
+          }
+        } catch {
+          // Element might not have MIDI values (e.g., rest)
+        }
+      })
+
+      return notes
+    } catch {
+      return []
+    }
+  }, [svg])
+
+  // Get time for a specific element
+  const getTimeForElement = useCallback((elementId: string): number | null => {
+    const toolkit = toolkitRef.current
+    if (!toolkit) return null
+
+    try {
+      return toolkit.getTimeForElement(elementId)
+    } catch {
+      return null
+    }
+  }, [])
+
   return {
     isReady,
     isLoading,
@@ -145,5 +203,7 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
     loadMusicXml,
     setOptions,
     getMidiBase64,
+    getNoteElements,
+    getTimeForElement,
   }
 }

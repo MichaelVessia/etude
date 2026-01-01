@@ -23,6 +23,7 @@ export interface NoteSubmitResult {
   pitch: number
   result: "correct" | "wrong" | "extra"
   timingOffset: number
+  expectedNoteTime: number | null // original startTime from piece start (for Verovio UI mapping)
 }
 
 export interface SessionEndResult {

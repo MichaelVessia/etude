@@ -19,7 +19,8 @@ import type { MatchResult } from "./comparison.js"
 export interface SessionState {
   sessionId: string
   pieceId: PieceId
-  expectedNotes: NoteEvent[]
+  expectedNotes: NoteEvent[] // tempo-adjusted notes for matching
+  originalNotes: NoteEvent[] // original notes for UI mapping (piece time)
   matchedIndices: Set<number>
   playedNotes: PlayedNote[]
   matchResults: MatchResult[]
@@ -41,6 +42,7 @@ export interface NoteSubmitResult {
   pitch: number
   result: "correct" | "wrong" | "extra"
   timingOffset: number
+  expectedNoteTime: number | null // original startTime from piece start (for Verovio UI mapping)
 }
 
 export interface SessionEndResult {
@@ -193,6 +195,7 @@ export const SessionServiceLive = Layer.effect(
             sessionId,
             pieceId,
             expectedNotes: adjustedNotes,
+            originalNotes: handFilteredNotes, // preserve original times for UI mapping
             matchedIndices: new Set(),
             playedNotes: [],
             matchResults: [],
@@ -232,6 +235,7 @@ export const SessionServiceLive = Layer.effect(
               pitch,
               result: "extra" as const,
               timingOffset: 0,
+              expectedNoteTime: null,
             }
           }
 
@@ -277,10 +281,23 @@ export const SessionServiceLive = Layer.effect(
             }
           })
 
+          // Look up original note time for UI mapping
+          // Find the index of the matched note in expectedNotes, then get original time
+          let originalNoteTime: number | null = null
+          if (result.expectedNote) {
+            const matchedIndex = state.expectedNotes.findIndex(
+              (n) => n === result.expectedNote
+            )
+            if (matchedIndex >= 0 && matchedIndex < state.originalNotes.length) {
+              originalNoteTime = state.originalNotes[matchedIndex]!.startTime
+            }
+          }
+
           return {
             pitch,
             result: result.result,
             timingOffset: result.timingOffset,
+            expectedNoteTime: originalNoteTime,
           }
         }),
 
