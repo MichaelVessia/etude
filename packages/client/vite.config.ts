@@ -6,4 +6,10 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ["verovio"],
   },
+  server: {
+    watch: {
+      usePolling: true,
+      interval: 100,
+    },
+  },
 })
