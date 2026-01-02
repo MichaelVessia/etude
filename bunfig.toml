@@ -1,3 +1,4 @@
 [test]
 root = "./packages"
 testMatch = ["**/tests/**/*.test.ts", "**/*.test.ts"]
+preload = ["./packages/client/test-setup.ts"]
