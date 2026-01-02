@@ -175,18 +175,13 @@ export function usePlayhead(
     const svgBounds = svgElement.getBoundingClientRect()
     svgBoundsRef.current = svgBounds
 
-    console.log("[Playhead] Initializing with", noteElements.length, "notes")
-
     // Calculate full staff height (min Y to max Y+height of all notes)
     let minY = Infinity
     let maxY = 0
 
     for (const note of noteElements) {
       const el = document.getElementById(note.elementId)
-      if (!el) {
-        console.log("[Playhead] Element not found:", note.elementId)
-        continue
-      }
+      if (!el) continue
 
       const bounds = el.getBoundingClientRect()
       // Convert to coordinates relative to SVG
@@ -220,12 +215,6 @@ export function usePlayhead(
     // Sort by time
     positions.sort((a, b) => a.time - b.time)
     notePositionsRef.current = positions
-
-    console.log("[Playhead] Found", positions.length, "note positions")
-    console.log("[Playhead] Fixed Y:", fixedY, "Height:", fixedHeight)
-    if (positions.length > 0) {
-      console.log("[Playhead] First position:", positions[0])
-    }
 
     // Set initial position
     if (positions.length > 0) {

@@ -150,10 +150,7 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
   // Parses the SVG to find note IDs and queries Verovio for timing info
   const getNoteElements = useCallback((): NoteElementInfo[] => {
     const toolkit = toolkitRef.current
-    if (!toolkit || !svg) {
-      console.log("[Verovio] getNoteElements: toolkit or svg not ready")
-      return []
-    }
+    if (!toolkit || !svg) return []
 
     try {
       // Must render MIDI before querying MIDI values
@@ -163,7 +160,6 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
       const parser = new DOMParser()
       const doc = parser.parseFromString(svg, "image/svg+xml")
       const noteElements = doc.querySelectorAll(".note")
-      console.log("[Verovio] Found", noteElements.length, "note elements in SVG")
 
       const notes: NoteElementInfo[] = []
       noteElements.forEach((el) => {
@@ -171,10 +167,6 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
         if (!elementId) return // Skip elements without IDs
         try {
           const midiValues = toolkit.getMIDIValuesForElement(elementId)
-          // Debug: log first few values to see actual property names
-          if (notes.length < 3) {
-            console.log("[Verovio] MIDI values for", elementId, ":", JSON.stringify(midiValues))
-          }
           if (midiValues && midiValues.pitch !== undefined) {
             // Get page number for this element
             let page = 1
@@ -196,10 +188,8 @@ export function useVerovio(initialOptions?: VerovioOptions): UseVerovioResult {
         }
       })
 
-      console.log("[Verovio] Returning", notes.length, "notes with MIDI values")
       return notes
-    } catch (e) {
-      console.error("[Verovio] Error in getNoteElements:", e)
+    } catch {
       return []
     }
   }, [svg])
