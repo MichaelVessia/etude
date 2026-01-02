@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 
-const SESSION_API = "http://localhost:3001/api/session"
-const PIECE_API = "http://localhost:3001/api/piece"
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001"
+const SESSION_API = `${API_BASE}/api/session`
+const PIECE_API = `${API_BASE}/api/piece`
 
 export type Hand = "left" | "right" | "both"
 
