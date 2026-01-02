@@ -3,6 +3,7 @@ import {
   HttpRouter,
   HttpServerRequest,
   HttpServerResponse,
+  HttpApp,
 } from "@effect/platform"
 import { SessionServiceLive } from "../../src/services/session.js"
 import { ComparisonServiceLive } from "../../src/services/comparison.js"
@@ -34,12 +35,37 @@ export const TestServiceLayer = Layer.mergeAll(
   SqliteTestLayer
 )
 
+// Add CORS headers to all responses (mirrors server.ts)
+export const addCorsHeaders = <E, R>(app: HttpApp.Default<E, R>): HttpApp.Default<E, R> =>
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest
+
+    // Handle preflight OPTIONS
+    if (request.method === "OPTIONS") {
+      return HttpServerResponse.empty({
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Max-Age": "86400",
+        },
+      })
+    }
+
+    const response = yield* app
+    return HttpServerResponse.setHeader(response, "Access-Control-Allow-Origin", "*")
+  }) as HttpApp.Default<E, R>
+
 // Build router matching server.ts
-const router = HttpRouter.empty.pipe(
+export const router = HttpRouter.empty.pipe(
   HttpRouter.get("/health", HttpServerResponse.text("ok")),
   HttpRouter.mount("/api/session", sessionRoutes),
   HttpRouter.mount("/api/piece", pieceRoutes)
 )
+
+// Router with CORS middleware applied
+export const routerWithCors = addCorsHeaders(router)
 
 // Create a test request
 export const makeRequest = (
@@ -62,6 +88,19 @@ export const runRequest = (request: Request) =>
   Effect.gen(function* () {
     const serverRequest = HttpServerRequest.fromWeb(request)
     const response = yield* router.pipe(
+      Effect.provideService(
+        HttpServerRequest.HttpServerRequest,
+        serverRequest
+      )
+    )
+    return response
+  })
+
+// Run a request through the router with CORS middleware
+export const runRequestWithCors = (request: Request) =>
+  Effect.gen(function* () {
+    const serverRequest = HttpServerRequest.fromWeb(request)
+    const response = yield* routerWithCors.pipe(
       Effect.provideService(
         HttpServerRequest.HttpServerRequest,
         serverRequest
