@@ -38,7 +38,7 @@ export function useNoteColoring(): UseNoteColoringResult {
   // Track colored state by elementId
   const colorStateRef = useRef<Map<string, NoteColorInfo>>(new Map())
 
-  // Apply color to a note element in the SVG
+  // Apply color to note head only (not stems or flags)
   const applyColor = useCallback((elementId: string, state: NoteColorState) => {
     const color = NOTE_COLORS[state]
 
@@ -47,18 +47,19 @@ export function useNoteColoring(): UseNoteColoringResult {
       return
     }
 
-    // Color all child elements (note head, stem, etc.)
-    const children = noteElement.querySelectorAll('*')
-    children.forEach((child) => {
-      const svgChild = child as SVGElement
-      if (svgChild.style) {
-        svgChild.style.fill = color
-        svgChild.style.stroke = color
+    // Verovio structure: <g class="note"> contains <use> for note head
+    // Target only <use> elements (note heads) - not <rect> (stems) or other elements
+    const useElements = noteElement.querySelectorAll('use')
+    useElements.forEach((use) => {
+      // Skip accidentals (they have class="accid" parent)
+      if (use.closest('.accid')) return
+
+      const svgUse = use as SVGUseElement
+      if (svgUse.style) {
+        svgUse.style.fill = color
+        svgUse.style.stroke = color
       }
     })
-
-    // Also color the element itself
-    ;(noteElement as unknown as SVGElement).style.fill = color
 
     colorStateRef.current.set(elementId, { elementId, state })
   }, [])
