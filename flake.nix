@@ -17,7 +17,14 @@
           bun
           typescript
           lefthook
+          nodejs_22  # For npx/npm (dev-browser)
+          playwright-driver.browsers  # For Playwright
         ];
+
+        shellHook = ''
+          export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}
+          export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+        '';
       };
     });
   };

@@ -43,22 +43,19 @@ export function useNoteColoring(): UseNoteColoringResult {
     const color = NOTE_COLORS[state]
 
     const noteElement = document.getElementById(elementId)
-    if (!noteElement) {
-      return
-    }
+    if (!noteElement) return
 
     // Verovio structure: <g class="note"> contains <use> for note head
     // Target only <use> elements (note heads) - not <rect> (stems) or other elements
     const useElements = noteElement.querySelectorAll('use')
+
     useElements.forEach((use) => {
       // Skip accidentals (they have class="accid" parent)
       if (use.closest('.accid')) return
 
-      const svgUse = use as SVGUseElement
-      if (svgUse.style) {
-        svgUse.style.fill = color
-        svgUse.style.stroke = color
-      }
+      // Set attributes directly for SVG use elements
+      use.setAttribute('fill', color)
+      use.setAttribute('stroke', color)
     })
 
     colorStateRef.current.set(elementId, { elementId, state })
@@ -93,9 +90,7 @@ export function useNoteColoring(): UseNoteColoringResult {
   // Process a note result from the server
   const processNoteResult = useCallback((result: NoteSubmitResult) => {
     // Skip extra notes (no visual feedback on staff)
-    if (result.result === "extra") {
-      return
-    }
+    if (result.result === "extra") return
 
     // Determine color based on result
     let state: NoteColorState
@@ -108,14 +103,10 @@ export function useNoteColoring(): UseNoteColoringResult {
 
     // Find the next uncolored note with this pitch
     const notesForPitch = pitchToNotesRef.current.get(result.pitch)
-    if (!notesForPitch || notesForPitch.length === 0) {
-      return
-    }
+    if (!notesForPitch || notesForPitch.length === 0) return
 
     const nextIndex = pitchNextIndexRef.current.get(result.pitch) ?? 0
-    if (nextIndex >= notesForPitch.length) {
-      return
-    }
+    if (nextIndex >= notesForPitch.length) return
 
     const noteToColor = notesForPitch[nextIndex]!
     applyColor(noteToColor.elementId, state)

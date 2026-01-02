@@ -1,14 +1,22 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 interface MidiSimulatorProps {
   onNote: (pitch: number) => void
+  onEnable?: () => void
 }
 
 /**
  * Dev-only MIDI simulator for testing without a physical keyboard
  */
-export function MidiSimulator({ onNote }: MidiSimulatorProps) {
+export function MidiSimulator({ onNote, onEnable }: MidiSimulatorProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+
+  // Enable simulation mode when expanded
+  useEffect(() => {
+    if (isExpanded) {
+      onEnable?.()
+    }
+  }, [isExpanded, onEnable])
   const notes = [60, 62, 64, 65, 67, 69, 71, 72]
   const noteNames = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]
 

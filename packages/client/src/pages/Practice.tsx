@@ -3,7 +3,6 @@ import { useLocation, useParams } from "wouter"
 import { SheetMusicView } from "../components/SheetMusicView.js"
 import { PracticeControls } from "../components/PracticeControls.js"
 import { ResultsOverlay } from "../components/ResultsOverlay.js"
-import { CountdownOverlay } from "../components/CountdownOverlay.js"
 import { MidiSimulator } from "../components/dev/MidiSimulator.js"
 import {
   type NoteElementInfo,
@@ -30,8 +29,6 @@ export function Practice({ midi }: PracticeProps) {
 
   // UI state
   const [midiBase64, setMidiBase64] = useState<string | null>(null)
-  const [showCountdown, setShowCountdown] = useState(false)
-  const [countdownValue, setCountdownValue] = useState(3)
   const [showResults, setShowResults] = useState(false)
   const [sheetMusicPage, setSheetMusicPage] = useState(1)
 
@@ -172,17 +169,6 @@ export function Practice({ midi }: PracticeProps) {
   const handleStartPractice = useCallback(async () => {
     if (!piece?.xml) return
 
-    // Show countdown
-    setShowCountdown(true)
-    setCountdownValue(3)
-
-    for (let i = 3; i >= 1; i--) {
-      setCountdownValue(i)
-      await new Promise(resolve => setTimeout(resolve, 1000))
-    }
-
-    setShowCountdown(false)
-
     // Import piece and start session
     const importResult = await sessionRef.current.importPiece({
       id: piece.id,
@@ -224,6 +210,24 @@ export function Practice({ midi }: PracticeProps) {
     setShowResults(false)
     handleStartPractice()
   }, [handleStartPractice])
+
+  // Keyboard shortcut: R to restart practice
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'r' || e.key === 'R') {
+        // Don't trigger if typing in an input
+        if (e.target instanceof HTMLInputElement) return
+        e.preventDefault()
+        if (session.isActive) {
+          session.endSession().then(() => handleStartPractice())
+        } else {
+          handleStartPractice()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [session, handleStartPractice])
 
   if (error) {
     return (
@@ -313,10 +317,6 @@ export function Practice({ midi }: PracticeProps) {
         } : undefined}
       />
 
-      {/* Countdown Overlay */}
-      {showCountdown && (
-        <CountdownOverlay value={countdownValue} />
-      )}
 
       {/* Results Overlay */}
       {showResults && session.results && (
@@ -329,7 +329,7 @@ export function Practice({ midi }: PracticeProps) {
 
       {/* Dev: MIDI Simulator */}
       {import.meta.env.DEV && (
-        <MidiSimulator onNote={midi.simulateNote} />
+        <MidiSimulator onNote={midi.simulateNote} onEnable={midi.enableSimulation} />
       )}
     </div>
   )

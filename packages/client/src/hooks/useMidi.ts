@@ -24,6 +24,8 @@ export interface UseMidiResult {
   error: string | null
   /** Inject a simulated note (for dev testing without hardware) */
   simulateNote: (pitch: number, velocity?: number) => void
+  /** Enable simulation mode (sets isConnected to true in dev) */
+  enableSimulation: () => void
 }
 
 // MIDI status bytes
@@ -62,6 +64,7 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
   const [selectedInput, setSelectedInput] = useState<MIDIInput | null>(null)
   const [lastNote, setLastNote] = useState<MidiNoteEvent | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [simulationMode, setSimulationMode] = useState(false)
 
   // Request MIDI access on mount
   useEffect(() => {
@@ -192,14 +195,22 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
     [onNote]
   )
 
+  // Enable simulation mode (for dev testing without hardware)
+  const enableSimulation = useCallback(() => {
+    if (import.meta.env.DEV) {
+      setSimulationMode(true)
+    }
+  }, [])
+
   return {
     isSupported,
-    isConnected: selectedInput !== null,
+    isConnected: selectedInput !== null || simulationMode,
     devices,
     selectedDevice,
     selectDevice,
     lastNote,
     error,
     simulateNote,
+    enableSimulation,
   }
 }
