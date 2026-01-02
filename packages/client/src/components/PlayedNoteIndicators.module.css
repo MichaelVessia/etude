@@ -5,7 +5,7 @@
   overflow: hidden;
 }
 
-.noteIndicator {
+.extraIndicator {
   position: absolute;
   transform: translate(-50%, -50%);
   opacity: 0.9;
@@ -28,23 +28,9 @@
   height: 100%;
 }
 
-/* Correct note - green */
-.correct .noteHead ellipse {
-  fill: var(--color-correct);
-  stroke: var(--color-correct);
-  stroke-width: 1;
-}
-
-/* Wrong note - red */
-.wrong .noteHead ellipse {
+/* Extra note indicator - red */
+.extraIndicator .noteHead ellipse {
   fill: var(--color-wrong);
   stroke: var(--color-wrong);
-  stroke-width: 1;
-}
-
-/* Extra note - orange/yellow */
-.extra .noteHead ellipse {
-  fill: var(--color-late);
-  stroke: var(--color-late);
   stroke-width: 1;
 }

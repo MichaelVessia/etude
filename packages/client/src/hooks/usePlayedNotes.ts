@@ -1,8 +1,14 @@
 import { useState, useRef, useCallback } from "react"
-import type { PlayedNoteIndicator } from "../components/PlayedNoteIndicators.js"
 import type { NoteSubmitResult } from "./useSession.js"
 import type { PlayheadPosition } from "./usePlayhead.js"
 import type { NoteElementInfo } from "./useVerovio.js"
+
+export interface ExtraNoteIndicator {
+  id: string
+  pitch: number
+  x: number
+  y: number
+}
 
 export interface StaffBounds {
   minY: number
@@ -13,22 +19,19 @@ export interface StaffBounds {
   noteHeight: number
 }
 
-export interface UsePlayedNotesResult {
-  playedNotes: PlayedNoteIndicator[]
+export interface UseExtraNotesResult {
+  extraNotes: ExtraNoteIndicator[]
   staffBounds: StaffBounds | undefined
-  /** Call when note elements are ready to build pitch-to-Y mapping */
   initializePitchMap: (noteElements: NoteElementInfo[], svgElement: SVGElement) => void
-  /** Call when a new note result arrives during active session */
-  addNoteIndicator: (result: NoteSubmitResult, playheadPosition: PlayheadPosition) => void
-  /** Clear all indicators (call when session starts) */
+  addExtraNote: (result: NoteSubmitResult, playheadPosition: PlayheadPosition) => void
   clear: () => void
 }
 
 /**
- * Manages played note visual indicators on the staff
+ * Manages extra note indicators (notes played that aren't in the score)
  */
-export function usePlayedNotes(): UsePlayedNotesResult {
-  const [playedNotes, setPlayedNotes] = useState<PlayedNoteIndicator[]>([])
+export function useExtraNotes(): UseExtraNotesResult {
+  const [extraNotes, setExtraNotes] = useState<ExtraNoteIndicator[]>([])
   const [staffBounds, setStaffBounds] = useState<StaffBounds | undefined>()
   const noteIdCounter = useRef(0)
   const pitchToYMapRef = useRef<Map<number, number>>(new Map())
@@ -48,7 +51,7 @@ export function usePlayedNotes(): UsePlayedNotesResult {
       if (!el) continue
 
       const bounds = el.getBoundingClientRect()
-      const y = bounds.top - svgBounds.top + bounds.height / 2 // Center of note
+      const y = bounds.top - svgBounds.top + bounds.height / 2
 
       minY = Math.min(minY, y)
       maxY = Math.max(maxY, y)
@@ -57,14 +60,12 @@ export function usePlayedNotes(): UsePlayedNotesResult {
       noteWidths.push(bounds.width)
       noteHeights.push(bounds.height)
 
-      // Collect all Y values for each pitch
       if (!pitchYMap.has(note.pitch)) {
         pitchYMap.set(note.pitch, [])
       }
       pitchYMap.get(note.pitch)!.push(y)
     }
 
-    // Average Y values for each pitch
     const finalPitchMap = new Map<number, number>()
     for (const [pitch, yValues] of pitchYMap) {
       const avgY = yValues.reduce((a, b) => a + b, 0) / yValues.length
@@ -79,54 +80,47 @@ export function usePlayedNotes(): UsePlayedNotesResult {
     }
   }, [])
 
-  const addNoteIndicator = useCallback((result: NoteSubmitResult, playheadPosition: PlayheadPosition) => {
+  const addExtraNote = useCallback((result: NoteSubmitResult, playheadPosition: PlayheadPosition) => {
+    // Only track extra notes
+    if (result.result !== "extra") return
+
     const bounds = staffBounds
     if (!bounds) return
 
-    const noteResult: "correct" | "wrong" | "extra" =
-      result.result === "correct" ? "correct" :
-      result.result === "wrong" ? "wrong" : "extra"
-
-    // Use playhead position for X coordinate
     const x = playheadPosition.x
 
-    // Get Y position from pitch map, or interpolate if not found
+    // Get Y position from pitch map, or interpolate
     let y: number
     const pitchMap = pitchToYMapRef.current
     if (pitchMap.has(result.pitch)) {
       y = pitchMap.get(result.pitch)!
     } else {
-      // Interpolate Y based on pitch range
-      // Higher pitch = lower Y (staff goes up visually)
       const pitchRange = bounds.maxPitch - bounds.minPitch || 1
       const yRange = bounds.maxY - bounds.minY
       const pitchRatio = (result.pitch - bounds.minPitch) / pitchRange
-      // Invert because higher pitch = lower Y
       y = bounds.maxY - pitchRatio * yRange
     }
 
-    const indicator: PlayedNoteIndicator = {
-      id: `note-${noteIdCounter.current++}`,
+    const indicator: ExtraNoteIndicator = {
+      id: `extra-${noteIdCounter.current++}`,
       pitch: result.pitch,
       x,
       y,
-      result: noteResult,
-      timestamp: Date.now(),
     }
 
-    setPlayedNotes(prev => [...prev, indicator])
+    setExtraNotes(prev => [...prev, indicator])
   }, [staffBounds])
 
   const clear = useCallback(() => {
-    setPlayedNotes([])
+    setExtraNotes([])
     noteIdCounter.current = 0
   }, [])
 
   return {
-    playedNotes,
+    extraNotes,
     staffBounds,
     initializePitchMap,
-    addNoteIndicator,
+    addExtraNote,
     clear,
   }
 }

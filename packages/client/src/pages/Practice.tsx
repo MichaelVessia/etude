@@ -11,7 +11,7 @@ import {
   useNoteColoring,
   usePlayhead,
   usePiece,
-  usePlayedNotes,
+  useExtraNotes,
   type UseMidiResult,
   type Hand,
 } from "../hooks/index.js"
@@ -58,10 +58,10 @@ export function Practice({ midi }: PracticeProps) {
   const noteColoringRef = useRef(noteColoring)
   noteColoringRef.current = noteColoring
 
-  // Played note indicators
-  const playedNotes = usePlayedNotes()
-  const playedNotesRef = useRef(playedNotes)
-  playedNotesRef.current = playedNotes
+  // Extra note indicators
+  const extraNotes = useExtraNotes()
+  const extraNotesRef = useRef(extraNotes)
+  extraNotesRef.current = extraNotes
 
   // Playhead callbacks
   const handlePlayheadTimeUpdate = useCallback(
@@ -95,7 +95,7 @@ export function Practice({ midi }: PracticeProps) {
     noteColoringRef.current.initializeNoteMap(noteElements)
     if (svgElement) {
       playheadRef.current.initialize(noteElements, svgElement)
-      playedNotesRef.current.initializePitchMap(noteElements, svgElement)
+      extraNotesRef.current.initializePitchMap(noteElements, svgElement)
     }
 
     // Update measure count from actual notes
@@ -117,7 +117,7 @@ export function Practice({ midi }: PracticeProps) {
     if (session.isActive) {
       noteColoringRef.current.resetColors()
       playheadRef.current.reset()
-      playedNotesRef.current.clear()
+      extraNotesRef.current.clear()
       setSheetMusicPage(1)
       setShowResults(false)
     } else {
@@ -157,12 +157,12 @@ export function Practice({ midi }: PracticeProps) {
     )
   }, [midi.lastNote])
 
-  // Create played note indicator when note result arrives
+  // Create extra note indicator when extra note result arrives
   useEffect(() => {
     if (!session.lastNoteResult || !session.isActive) return
     if (!playheadRef.current.position) return
 
-    playedNotesRef.current.addNoteIndicator(
+    extraNotesRef.current.addExtraNote(
       session.lastNoteResult,
       playheadRef.current.position
     )
@@ -281,6 +281,11 @@ export function Practice({ midi }: PracticeProps) {
           playheadPosition={playhead.position}
           showPlayhead={session.isActive && playhead.isRunning}
           page={session.isActive ? sheetMusicPage : undefined}
+          extraNotes={extraNotes.extraNotes}
+          noteSize={extraNotes.staffBounds ? {
+            width: extraNotes.staffBounds.noteWidth,
+            height: extraNotes.staffBounds.noteHeight,
+          } : undefined}
         />
       </main>
 

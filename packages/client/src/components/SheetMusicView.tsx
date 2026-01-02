@@ -1,6 +1,7 @@
-import { useVerovio, type NoteElementInfo } from "../hooks/index.js"
+import { useVerovio, type NoteElementInfo, type ExtraNoteIndicator } from "../hooks/index.js"
 import { useEffect, useRef } from "react"
 import { Playhead } from "./Playhead.js"
+import { ExtraNoteIndicators } from "./PlayedNoteIndicators.js"
 import type { PlayheadPosition } from "../hooks/usePlayhead.js"
 import styles from "./SheetMusicView.module.css"
 
@@ -11,6 +12,8 @@ interface SheetMusicViewProps {
   playheadPosition?: PlayheadPosition | null
   showPlayhead?: boolean
   page?: number | undefined
+  extraNotes?: ExtraNoteIndicator[]
+  noteSize?: { width: number; height: number } | undefined
 }
 
 export function SheetMusicView({
@@ -20,6 +23,8 @@ export function SheetMusicView({
   playheadPosition,
   showPlayhead = false,
   page,
+  extraNotes = [],
+  noteSize,
 }: SheetMusicViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const noteElementsInitializedRef = useRef(false)
@@ -160,6 +165,17 @@ export function SheetMusicView({
             y={playheadPosition.y + 32}
             height={playheadPosition.height}
             visible={true}
+          />
+        )}
+        {/* Extra note indicators */}
+        {extraNotes.length > 0 && (
+          <ExtraNoteIndicators
+            notes={extraNotes.map(n => ({
+              ...n,
+              x: n.x + 32, /* Account for svgWrapper padding */
+              y: n.y + 32,
+            }))}
+            noteSize={noteSize}
           />
         )}
       </div>

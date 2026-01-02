@@ -27,5 +27,5 @@ export type { PlayheadPosition, UsePlayheadResult } from "./usePlayhead.js"
 export { usePiece } from "./usePiece.js"
 export type { StoredPiece, UsePieceResult } from "./usePiece.js"
 
-export { usePlayedNotes } from "./usePlayedNotes.js"
-export type { StaffBounds, UsePlayedNotesResult } from "./usePlayedNotes.js"
+export { useExtraNotes } from "./usePlayedNotes.js"
+export type { ExtraNoteIndicator, StaffBounds, UseExtraNotesResult } from "./usePlayedNotes.js"
