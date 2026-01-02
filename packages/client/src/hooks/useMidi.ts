@@ -22,6 +22,8 @@ export interface UseMidiResult {
   selectDevice: (id: string | null) => void
   lastNote: MidiNoteEvent | null
   error: string | null
+  /** Inject a simulated note (for dev testing without hardware) */
+  simulateNote: (pitch: number, velocity?: number) => void
 }
 
 // MIDI status bytes
@@ -175,6 +177,21 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
     [devices]
   )
 
+  // Simulate a note (for dev testing)
+  const simulateNote = useCallback(
+    (pitch: number, velocity = 100) => {
+      const noteEvent: MidiNoteEvent = {
+        pitch: pitch as MidiPitch,
+        velocity: velocity as Velocity,
+        timestamp: performance.now() as Milliseconds,
+        on: true,
+      }
+      setLastNote(noteEvent)
+      onNote?.(noteEvent)
+    },
+    [onNote]
+  )
+
   return {
     isSupported,
     isConnected: selectedInput !== null,
@@ -183,5 +200,6 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
     selectDevice,
     lastNote,
     error,
+    simulateNote,
   }
 }

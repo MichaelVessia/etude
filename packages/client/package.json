@@ -16,7 +16,8 @@
     "react": "*",
     "react-dom": "*",
     "tone": "^15.1.22",
-    "verovio": "^5.7.0"
+    "verovio": "^5.7.0",
+    "wouter": "^3.9.0"
   },
   "devDependencies": {
     "@types/react": "*",

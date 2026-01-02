@@ -1,0 +1,61 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  background: rgba(250, 249, 247, 0.95);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 200ms ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.countdownWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 8px var(--color-accent-subtle), var(--shadow-xl);
+  animation: pulse 1s ease-out;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.countdown {
+  font-family: var(--font-display);
+  font-size: 80px;
+  font-weight: var(--weight-bold);
+  color: var(--color-text-inverse);
+  line-height: 1;
+}
+
+.hint {
+  font-size: var(--text-lg);
+  color: var(--color-text-secondary);
+}

@@ -1,0 +1,245 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(26, 24, 22, 0.6);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 300ms ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal {
+  width: 100%;
+  max-width: 420px;
+  margin: var(--space-4);
+  padding: var(--space-8);
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  animation: slideUp 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: var(--space-6);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.grade {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+/* Main Score Circle */
+.mainScore {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-8);
+}
+
+.scoreCircle {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--color-accent) calc(var(--progress) * 1%),
+    var(--color-bg-sunken) calc(var(--progress) * 1%)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scoreInner {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--color-bg-elevated);
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+}
+
+.scoreValue {
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+}
+
+.scorePercent {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.scoreLabel {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Breakdown */
+.breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.breakdownItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.breakdownHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.breakdownLabel {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.breakdownValue {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.progressBar {
+  height: 8px;
+  background: var(--color-bg-sunken);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Hand Breakdown */
+.handBreakdown {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  background: var(--color-bg-sunken);
+  border-radius: var(--radius-md);
+}
+
+.handItem {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.handLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.handValue {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+}
+
+/* Extra Notes */
+.extraNotes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-6);
+  background: var(--color-late-bg);
+  color: var(--color-late);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.extraIcon {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-base);
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.primaryButton,
+.secondaryButton {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.primaryButton:hover,
+.secondaryButton:hover {
+  transform: translateY(-1px);
+}
+
+.primaryButton {
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+}
+
+.primaryButton:hover {
+  background: var(--color-accent-hover);
+}
+
+.secondaryButton {
+  background: var(--color-bg-sunken);
+  color: var(--color-text-primary);
+}
+
+.secondaryButton:hover {
+  background: var(--color-border);
+}
