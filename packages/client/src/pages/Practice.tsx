@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef, useEffect } from "react"
+import { useCallback, useState, useRef, useEffect, useLayoutEffect } from "react"
 import { useLocation, useParams } from "wouter"
 import { SheetMusicView } from "../components/SheetMusicView.js"
 import { PracticeControls } from "../components/PracticeControls.js"
@@ -54,6 +54,13 @@ export function Practice({ midi }: PracticeProps) {
   const noteColoring = useNoteColoring()
   const noteColoringRef = useRef(noteColoring)
   noteColoringRef.current = noteColoring
+
+  // Re-apply note colors after each render (SVG gets replaced by React)
+  useLayoutEffect(() => {
+    if (session.isActive) {
+      noteColoringRef.current.reapplyColors()
+    }
+  })
 
   // Extra note indicators
   const extraNotes = useExtraNotes()

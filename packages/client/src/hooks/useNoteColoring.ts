@@ -26,6 +26,8 @@ export interface UseNoteColoringResult {
   markMissedNotes: (currentTime: number) => void
   resetColors: () => void
   getNoteStates: () => Map<string, NoteColorInfo>
+  /** Re-apply all colors to the DOM (call after SVG re-renders) */
+  reapplyColors: () => void
 }
 
 export function useNoteColoring(): UseNoteColoringResult {
@@ -38,12 +40,10 @@ export function useNoteColoring(): UseNoteColoringResult {
   // Track colored state by elementId
   const colorStateRef = useRef<Map<string, NoteColorInfo>>(new Map())
 
-  // Apply color to note head only (not stems or flags)
-  const applyColor = useCallback((elementId: string, state: NoteColorState) => {
-    const color = NOTE_COLORS[state]
-
+  // Apply color to DOM element (doesn't update state)
+  const applyColorToDOM = useCallback((elementId: string, color: string) => {
     const noteElement = document.getElementById(elementId)
-    if (!noteElement) return
+    if (!noteElement) return false
 
     // Verovio structure: <g class="note"> contains <use> for note head
     // Target only <use> elements (note heads) - not <rect> (stems) or other elements
@@ -58,8 +58,25 @@ export function useNoteColoring(): UseNoteColoringResult {
       use.setAttribute('stroke', color)
     })
 
-    colorStateRef.current.set(elementId, { elementId, state })
+    return true
   }, [])
+
+  // Apply color to note head and update state
+  const applyColor = useCallback((elementId: string, state: NoteColorState) => {
+    const color = NOTE_COLORS[state]
+    applyColorToDOM(elementId, color)
+    colorStateRef.current.set(elementId, { elementId, state })
+  }, [applyColorToDOM])
+
+  // Re-apply all colors to DOM (call after SVG re-renders)
+  const reapplyColors = useCallback(() => {
+    for (const [elementId, info] of colorStateRef.current) {
+      // Only apply non-pending colors
+      if (info.state !== "pending") {
+        applyColorToDOM(elementId, NOTE_COLORS[info.state])
+      }
+    }
+  }, [applyColorToDOM])
 
   // Initialize note maps from Verovio elements
   const initializeNoteMap = useCallback((noteElements: NoteElementInfo[]) => {
@@ -85,6 +102,7 @@ export function useNoteColoring(): UseNoteColoringResult {
         state: "pending",
       })
     }
+
   }, [])
 
   // Process a note result from the server
@@ -149,5 +167,6 @@ export function useNoteColoring(): UseNoteColoringResult {
     markMissedNotes,
     resetColors,
     getNoteStates,
-  }), [initializeNoteMap, processNoteResult, markMissedNotes, resetColors, getNoteStates])
+    reapplyColors,
+  }), [initializeNoteMap, processNoteResult, markMissedNotes, resetColors, getNoteStates, reapplyColors])
 }
