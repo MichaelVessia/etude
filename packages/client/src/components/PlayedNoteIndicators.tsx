@@ -11,9 +11,13 @@ export interface PlayedNoteIndicator {
 
 interface PlayedNoteIndicatorsProps {
   notes: PlayedNoteIndicator[]
+  noteSize?: { width: number; height: number }
 }
 
-export function PlayedNoteIndicators({ notes }: PlayedNoteIndicatorsProps) {
+export function PlayedNoteIndicators({ notes, noteSize }: PlayedNoteIndicatorsProps) {
+  const width = noteSize?.width ?? 24
+  const height = noteSize?.height ?? 20
+
   return (
     <div className={styles.container}>
       {notes.map(note => (
@@ -23,6 +27,8 @@ export function PlayedNoteIndicators({ notes }: PlayedNoteIndicatorsProps) {
           style={{
             left: note.x,
             top: note.y,
+            width,
+            height,
           }}
         >
           <svg viewBox="0 0 24 20" className={styles.noteHead}>

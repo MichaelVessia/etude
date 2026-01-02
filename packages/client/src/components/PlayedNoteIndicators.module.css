@@ -7,11 +7,9 @@
 
 .noteIndicator {
   position: absolute;
-  width: 24px;
-  height: 20px;
   transform: translate(-50%, -50%);
   opacity: 0.9;
-  animation: fadeIn 100ms ease-out, fadeOut 500ms ease-out 2.5s forwards;
+  animation: fadeIn 100ms ease-out;
 }
 
 @keyframes fadeIn {
@@ -22,15 +20,6 @@
   to {
     opacity: 0.9;
     transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-@keyframes fadeOut {
-  from {
-    opacity: 0.9;
-  }
-  to {
-    opacity: 0;
   }
 }
 

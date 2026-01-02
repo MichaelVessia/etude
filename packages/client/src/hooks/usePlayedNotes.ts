@@ -9,6 +9,8 @@ export interface StaffBounds {
   maxY: number
   minPitch: number
   maxPitch: number
+  noteWidth: number
+  noteHeight: number
 }
 
 export interface UsePlayedNotesResult {
@@ -38,6 +40,8 @@ export function usePlayedNotes(): UsePlayedNotesResult {
     let maxY = 0
     let minPitch = Infinity
     let maxPitch = 0
+    const noteWidths: number[] = []
+    const noteHeights: number[] = []
 
     for (const note of noteElements) {
       const el = document.getElementById(note.elementId)
@@ -50,6 +54,8 @@ export function usePlayedNotes(): UsePlayedNotesResult {
       maxY = Math.max(maxY, y)
       minPitch = Math.min(minPitch, note.pitch)
       maxPitch = Math.max(maxPitch, note.pitch)
+      noteWidths.push(bounds.width)
+      noteHeights.push(bounds.height)
 
       // Collect all Y values for each pitch
       if (!pitchYMap.has(note.pitch)) {
@@ -67,7 +73,9 @@ export function usePlayedNotes(): UsePlayedNotesResult {
     pitchToYMapRef.current = finalPitchMap
 
     if (minY !== Infinity) {
-      setStaffBounds({ minY, maxY, minPitch, maxPitch })
+      const avgWidth = noteWidths.reduce((a, b) => a + b, 0) / noteWidths.length
+      const avgHeight = noteHeights.reduce((a, b) => a + b, 0) / noteHeights.length
+      setStaffBounds({ minY, maxY, minPitch, maxPitch, noteWidth: avgWidth, noteHeight: avgHeight })
     }
   }, [])
 
@@ -107,11 +115,6 @@ export function usePlayedNotes(): UsePlayedNotesResult {
     }
 
     setPlayedNotes(prev => [...prev, indicator])
-
-    // Remove this indicator after 3 seconds
-    setTimeout(() => {
-      setPlayedNotes(prev => prev.filter(n => n.id !== indicator.id))
-    }, 3000)
   }, [staffBounds])
 
   const clear = useCallback(() => {

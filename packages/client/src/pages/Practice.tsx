@@ -281,7 +281,6 @@ export function Practice({ midi }: PracticeProps) {
           playheadPosition={playhead.position}
           showPlayhead={session.isActive && playhead.isRunning}
           page={session.isActive ? sheetMusicPage : undefined}
-          playedNotes={playedNotes.playedNotes}
         />
       </main>
 

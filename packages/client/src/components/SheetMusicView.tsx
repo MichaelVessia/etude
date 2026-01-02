@@ -1,7 +1,6 @@
 import { useVerovio, type NoteElementInfo } from "../hooks/index.js"
 import { useEffect, useRef } from "react"
 import { Playhead } from "./Playhead.js"
-import { PlayedNoteIndicators, type PlayedNoteIndicator } from "./PlayedNoteIndicators.js"
 import type { PlayheadPosition } from "../hooks/usePlayhead.js"
 import styles from "./SheetMusicView.module.css"
 
@@ -12,7 +11,6 @@ interface SheetMusicViewProps {
   playheadPosition?: PlayheadPosition | null
   showPlayhead?: boolean
   page?: number | undefined
-  playedNotes?: PlayedNoteIndicator[]
 }
 
 export function SheetMusicView({
@@ -22,7 +20,6 @@ export function SheetMusicView({
   playheadPosition,
   showPlayhead = false,
   page,
-  playedNotes = [],
 }: SheetMusicViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const noteElementsInitializedRef = useRef(false)
@@ -163,16 +160,6 @@ export function SheetMusicView({
             y={playheadPosition.y + 32}
             height={playheadPosition.height}
             visible={true}
-          />
-        )}
-        {/* Played note indicators */}
-        {playedNotes.length > 0 && (
-          <PlayedNoteIndicators
-            notes={playedNotes.map(n => ({
-              ...n,
-              x: n.x + 32, /* Account for svgWrapper padding */
-              y: n.y + 32,
-            }))}
           />
         )}
       </div>
