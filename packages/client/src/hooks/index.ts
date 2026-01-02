@@ -23,3 +23,9 @@ export type { NoteColorState, NoteColorInfo, UseNoteColoringResult } from "./use
 
 export { usePlayhead } from "./usePlayhead.js"
 export type { PlayheadPosition, UsePlayheadResult } from "./usePlayhead.js"
+
+export { usePiece } from "./usePiece.js"
+export type { StoredPiece, UsePieceResult } from "./usePiece.js"
+
+export { usePlayedNotes } from "./usePlayedNotes.js"
+export type { StaffBounds, UsePlayedNotesResult } from "./usePlayedNotes.js"
