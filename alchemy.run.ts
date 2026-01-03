@@ -1,16 +1,12 @@
 import alchemy from "alchemy"
-import { Assets, CloudflareStateStore, D1Database, DurableObjectNamespace, Worker } from "alchemy/cloudflare"
+import { Assets, D1Database, DurableObjectNamespace, Worker } from "alchemy/cloudflare"
+import { CloudflareStateStore } from "alchemy/state"
 
 const app = await alchemy("etude", {
   stage: process.env.ALCHEMY_STAGE ?? "dev",
-  stateStore:
-    process.env.ALCHEMY_STATE_TOKEN
-      ? new CloudflareStateStore({
-          apiToken: process.env.CLOUDFLARE_API_TOKEN,
-          accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
-          namespaceId: process.env.ALCHEMY_STATE_TOKEN,
-        })
-      : undefined,
+  stateStore: process.env.ALCHEMY_STATE_TOKEN
+    ? (scope) => new CloudflareStateStore(scope)
+    : undefined,
 })
 
 // D1 Database for pieces and attempts
