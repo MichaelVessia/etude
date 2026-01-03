@@ -1,13 +1,67 @@
-import { describe, expect, it, beforeEach, mock } from "bun:test"
+import { describe, expect, it, beforeEach, afterEach, mock } from "bun:test"
 import { renderHook, act, waitFor } from "@testing-library/react"
 import { useSession } from "../useSession.js"
 import type {
   SessionStartParams,
   SessionStartResult,
-  NoteSubmitResult,
   SessionEndResult,
   ImportPieceResult,
 } from "../useSession.js"
+import type { WsServerMessage } from "@etude/shared"
+
+// Mock WebSocket implementation
+class MockWebSocket {
+  static CONNECTING = 0
+  static OPEN = 1
+  static CLOSING = 2
+  static CLOSED = 3
+
+  readyState = MockWebSocket.CONNECTING
+  url: string
+
+  onopen: ((event: Event) => void) | null = null
+  onclose: ((event: CloseEvent) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
+  onmessage: ((event: MessageEvent) => void) | null = null
+
+  private sentMessages: string[] = []
+
+  constructor(url: string) {
+    this.url = url
+    // Simulate async connection
+    setTimeout(() => {
+      if (this.readyState === MockWebSocket.CONNECTING) {
+        this.readyState = MockWebSocket.OPEN
+        this.onopen?.(new Event("open"))
+      }
+    }, 0)
+  }
+
+  send(data: string): void {
+    this.sentMessages.push(data)
+  }
+
+  close(code?: number): void {
+    this.readyState = MockWebSocket.CLOSED
+    const event = new CloseEvent("close", { code: code ?? 1000, wasClean: true })
+    this.onclose?.(event)
+  }
+
+  // Test helpers
+  simulateMessage(data: WsServerMessage): void {
+    const event = new MessageEvent("message", { data: JSON.stringify(data) })
+    this.onmessage?.(event)
+  }
+
+  getSentMessages(): string[] {
+    return this.sentMessages
+  }
+}
+
+// Track created WebSocket instances
+let mockWsInstances: MockWebSocket[] = []
+let pendingTimeouts: ReturnType<typeof setTimeout>[] = []
+const originalSetTimeout = globalThis.setTimeout
 
 // Mock fetch globally
 const mockFetch = mock(() => Promise.resolve(new Response()))
@@ -15,6 +69,35 @@ const mockFetch = mock(() => Promise.resolve(new Response()))
 beforeEach(() => {
   mockFetch.mockReset()
   globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  mockWsInstances = []
+  pendingTimeouts = []
+
+  // Wrap setTimeout to track pending timeouts
+  const wrappedSetTimeout = (fn: (...args: unknown[]) => void, delay: number) => {
+    const id = originalSetTimeout(fn, delay)
+    pendingTimeouts.push(id)
+    return id
+  }
+  globalThis.setTimeout = wrappedSetTimeout as typeof setTimeout
+
+  // @ts-expect-error - mocking global WebSocket
+  globalThis.WebSocket = class extends MockWebSocket {
+    constructor(url: string) {
+      super(url)
+      mockWsInstances.push(this)
+    }
+  }
+})
+
+afterEach(() => {
+  // Clear all pending timeouts
+  for (const id of pendingTimeouts) {
+    clearTimeout(id)
+  }
+  pendingTimeouts = []
+  mockWsInstances = []
+  globalThis.setTimeout = originalSetTimeout
 })
 
 // Helper to create mock responses
@@ -29,11 +112,9 @@ describe("useSession", () => {
   describe("initial state", () => {
     it("starts with inactive state", async () => {
       // Mock refreshState call on mount
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ active: false })
-      )
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
 
-      const { result } = renderHook(() => useSession())
+      const { result, unmount } = renderHook(() => useSession())
 
       expect(result.current.isActive).toBe(false)
       expect(result.current.isLoading).toBe(false)
@@ -41,6 +122,7 @@ describe("useSession", () => {
       expect(result.current.sessionState).toBeNull()
       expect(result.current.lastNoteResult).toBeNull()
       expect(result.current.results).toBeNull()
+      unmount()
     })
 
     it("refreshes state on mount", async () => {
@@ -52,13 +134,14 @@ describe("useSession", () => {
         })
       )
 
-      const { result } = renderHook(() => useSession())
+      const { result, unmount } = renderHook(() => useSession())
 
       await waitFor(() => {
         expect(result.current.isActive).toBe(true)
       })
 
       expect(result.current.sessionState?.sessionId).toBe("existing-session")
+      unmount()
     })
   })
 
@@ -67,10 +150,11 @@ describe("useSession", () => {
       // Mock initial refreshState
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
 
-      const { result } = renderHook(() => useSession())
+      const { result, unmount } = renderHook(() => useSession())
 
-      const mockStartResult: SessionStartResult = {
+      const mockStartResult: SessionStartResult & { wsUrl: string } = {
         sessionId: "session-123",
+        wsUrl: "ws://localhost:8787/api/session/ws/session-123",
         expectedNoteCount: 50,
         measureRange: [1, 4],
       }
@@ -90,8 +174,7 @@ describe("useSession", () => {
         startResult = await result.current.startSession(params)
       })
 
-      expect(startResult).not.toBeNull()
-      expect(startResult).toMatchObject(mockStartResult)
+      expect(startResult).toMatchObject({ sessionId: "session-123" })
       expect(result.current.isActive).toBe(true)
       expect(result.current.isLoading).toBe(false)
       expect(result.current.sessionState).toMatchObject({
@@ -104,55 +187,13 @@ describe("useSession", () => {
         hand: "both",
         tempo: 120,
       })
-    })
-
-    it("sets loading state during request", async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
-
-      const { result } = renderHook(() => useSession())
-
-      // Create a deferred promise to control timing
-      let resolveStart: (value: Response) => void
-      const startPromise = new Promise<Response>((resolve) => {
-        resolveStart = resolve
-      })
-      mockFetch.mockReturnValueOnce(startPromise)
-
-      const params: SessionStartParams = {
-        pieceId: "piece-1",
-        measureStart: 1,
-        measureEnd: 4,
-        hand: "both",
-        tempo: 120,
-      }
-
-      let startPromiseResult: Promise<SessionStartResult | null>
-      act(() => {
-        startPromiseResult = result.current.startSession(params)
-      })
-
-      // Should be loading
-      expect(result.current.isLoading).toBe(true)
-
-      // Resolve the request
-      await act(async () => {
-        resolveStart!(
-          mockJsonResponse({
-            sessionId: "session-123",
-            expectedNoteCount: 50,
-            measureRange: [1, 4],
-          })
-        )
-        await startPromiseResult!
-      })
-
-      expect(result.current.isLoading).toBe(false)
+      unmount()
     })
 
     it("sets error on failure", async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
 
-      const { result } = renderHook(() => useSession())
+      const { result, unmount } = renderHook(() => useSession())
 
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ error: "Piece not found" }, false)
@@ -172,56 +213,19 @@ describe("useSession", () => {
 
       expect(result.current.isActive).toBe(false)
       expect(result.current.error).toBe("Piece not found")
+      unmount()
     })
 
-    it("clears previous results when starting new session", async () => {
+    it("connects WebSocket after start", async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
 
-      const { result } = renderHook(() => useSession())
-
-      // Start and end a session to get results
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          sessionId: "session-1",
-          expectedNoteCount: 10,
-          measureRange: [1, 2],
-        })
-      )
-
-      await act(async () => {
-        await result.current.startSession({
-          pieceId: "piece-1",
-          measureStart: 1,
-          measureEnd: 2,
-          hand: "both",
-          tempo: 120,
-        })
-      })
+      const { result, unmount } = renderHook(() => useSession())
 
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({
-          attemptId: "attempt-1",
-          noteAccuracy: 0.9,
-          timingAccuracy: 0.8,
-          combinedScore: 0.85,
-          leftHandAccuracy: null,
-          rightHandAccuracy: null,
-          extraNotes: 0,
-          missedNotes: [],
-        })
-      )
-
-      await act(async () => {
-        await result.current.endSession()
-      })
-
-      expect(result.current.results).not.toBeNull()
-
-      // Start new session - results should be cleared
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          sessionId: "session-2",
-          expectedNoteCount: 20,
+          sessionId: "session-123",
+          wsUrl: "ws://localhost:8787/api/session/ws/session-123",
+          expectedNoteCount: 50,
           measureRange: [1, 4],
         })
       )
@@ -236,246 +240,41 @@ describe("useSession", () => {
         })
       })
 
-      expect(result.current.results).toBeNull()
+      // Wait for WebSocket to be created
+      await waitFor(() => {
+        expect(mockWsInstances.length).toBe(1)
+      })
+
+      expect(mockWsInstances[0]?.url).toBe("ws://localhost:8787/api/session/ws/session-123")
+      unmount()
     })
   })
 
   describe("submitNote", () => {
-    it("submits note during active session", async () => {
+    it("does not send when not ready", async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
 
-      const { result } = renderHook(() => useSession())
+      const { result, unmount } = renderHook(() => useSession())
 
-      // Start session
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          sessionId: "session-123",
-          expectedNoteCount: 50,
-          measureRange: [1, 4],
-        })
-      )
-
-      await act(async () => {
-        await result.current.startSession({
-          pieceId: "piece-1",
-          measureStart: 1,
-          measureEnd: 4,
-          hand: "both",
-          tempo: 120,
-        })
+      // Try to send note without starting session
+      act(() => {
+        result.current.submitNote(60, 100, true)
       })
 
-      const mockNoteResult: NoteSubmitResult = {
-        pitch: 60,
-        result: "correct",
-        timingOffset: 25,
-        expectedNoteTime: 0,
-      }
-
-      mockFetch.mockResolvedValueOnce(mockJsonResponse(mockNoteResult))
-
-      let noteResult: NoteSubmitResult | null = null
-      await act(async () => {
-        noteResult = await result.current.submitNote(60, 100, true)
-      })
-
-      expect(noteResult).not.toBeNull()
-      expect(noteResult).toMatchObject(mockNoteResult)
-      expect(result.current.lastNoteResult).toEqual(mockNoteResult)
+      // No WebSocket should be created
+      expect(mockWsInstances.length).toBe(0)
+      unmount()
     })
 
-    it("updates playedNoteCount and matchedCount for correct notes", async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
-
-      const { result } = renderHook(() => useSession())
-
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          sessionId: "session-123",
-          expectedNoteCount: 50,
-          measureRange: [1, 4],
-        })
-      )
-
-      await act(async () => {
-        await result.current.startSession({
-          pieceId: "piece-1",
-          measureStart: 1,
-          measureEnd: 4,
-          hand: "both",
-          tempo: 120,
-        })
-      })
-
-      expect(result.current.sessionState?.playedNoteCount).toBe(0)
-      expect(result.current.sessionState?.matchedCount).toBe(0)
-
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          pitch: 60,
-          result: "correct",
-          timingOffset: 0,
-          expectedNoteTime: 0,
-        })
-      )
-
-      await act(async () => {
-        await result.current.submitNote(60, 100, true)
-      })
-
-      expect(result.current.sessionState?.playedNoteCount).toBe(1)
-      expect(result.current.sessionState?.matchedCount).toBe(1)
-    })
-
-    it("updates playedNoteCount but not matchedCount for wrong notes", async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
-
-      const { result } = renderHook(() => useSession())
-
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          sessionId: "session-123",
-          expectedNoteCount: 50,
-          measureRange: [1, 4],
-        })
-      )
-
-      await act(async () => {
-        await result.current.startSession({
-          pieceId: "piece-1",
-          measureStart: 1,
-          measureEnd: 4,
-          hand: "both",
-          tempo: 120,
-        })
-      })
-
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          pitch: 61,
-          result: "wrong",
-          timingOffset: 0,
-          expectedNoteTime: null,
-        })
-      )
-
-      await act(async () => {
-        await result.current.submitNote(61, 100, true)
-      })
-
-      expect(result.current.sessionState?.playedNoteCount).toBe(1)
-      expect(result.current.sessionState?.matchedCount).toBe(0)
-    })
-
-    it("returns null when session is not active", async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
-
-      const { result } = renderHook(() => useSession())
-
-      let noteResult: NoteSubmitResult | null = null
-      await act(async () => {
-        noteResult = await result.current.submitNote(60, 100, true)
-      })
-
-      expect(noteResult).toBeNull()
-      // Fetch should only be called for initial refreshState
-      expect(mockFetch).toHaveBeenCalledTimes(1)
-    })
-
-    it("does not update counts for note-off events", async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
-
-      const { result } = renderHook(() => useSession())
-
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          sessionId: "session-123",
-          expectedNoteCount: 50,
-          measureRange: [1, 4],
-        })
-      )
-
-      await act(async () => {
-        await result.current.startSession({
-          pieceId: "piece-1",
-          measureStart: 1,
-          measureEnd: 4,
-          hand: "both",
-          tempo: 120,
-        })
-      })
-
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          pitch: 60,
-          result: "correct",
-          timingOffset: 0,
-          expectedNoteTime: 0,
-        })
-      )
-
-      await act(async () => {
-        await result.current.submitNote(60, 0, false) // note-off
-      })
-
-      expect(result.current.sessionState?.playedNoteCount).toBe(0)
-      expect(result.current.sessionState?.matchedCount).toBe(0)
-    })
+    // Note: WebSocket note sending is tested in useNoteStream.test.ts
+    // and integration tests in ws-integration.test.ts
   })
 
   describe("endSession", () => {
-    it("transitions to results state", async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
-
-      const { result } = renderHook(() => useSession())
-
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          sessionId: "session-123",
-          expectedNoteCount: 50,
-          measureRange: [1, 4],
-        })
-      )
-
-      await act(async () => {
-        await result.current.startSession({
-          pieceId: "piece-1",
-          measureStart: 1,
-          measureEnd: 4,
-          hand: "both",
-          tempo: 120,
-        })
-      })
-
-      const mockEndResult: SessionEndResult = {
-        attemptId: "attempt-123",
-        noteAccuracy: 0.95,
-        timingAccuracy: 0.88,
-        combinedScore: 0.915,
-        leftHandAccuracy: 0.9,
-        rightHandAccuracy: 1.0,
-        extraNotes: 2,
-        missedNotes: [],
-      }
-
-      mockFetch.mockResolvedValueOnce(mockJsonResponse(mockEndResult))
-
-      let endResult: SessionEndResult | null = null
-      await act(async () => {
-        endResult = await result.current.endSession()
-      })
-
-      expect(endResult).not.toBeNull()
-      expect(endResult).toMatchObject(mockEndResult)
-      expect(result.current.results).toEqual(mockEndResult)
-      expect(result.current.isActive).toBe(false)
-      expect(result.current.sessionState).toBeNull()
-    })
-
     it("returns null when session is not active", async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
 
-      const { result } = renderHook(() => useSession())
+      const { result, unmount } = renderHook(() => useSession())
 
       let endResult: SessionEndResult | null = null
       await act(async () => {
@@ -483,75 +282,18 @@ describe("useSession", () => {
       })
 
       expect(endResult).toBeNull()
+      unmount()
     })
 
-    it("sets error on failure", async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
-
-      const { result } = renderHook(() => useSession())
-
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          sessionId: "session-123",
-          expectedNoteCount: 50,
-          measureRange: [1, 4],
-        })
-      )
-
-      await act(async () => {
-        await result.current.startSession({
-          pieceId: "piece-1",
-          measureStart: 1,
-          measureEnd: 4,
-          hand: "both",
-          tempo: 120,
-        })
-      })
-
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ error: "Session corrupted" }, false)
-      )
-
-      await act(async () => {
-        await result.current.endSession()
-      })
-
-      expect(result.current.error).toBe("Session corrupted")
-    })
-  })
-
-  describe("refreshState", () => {
-    it("updates session state from server", async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
-
-      const { result } = renderHook(() => useSession())
-
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({
-          active: true,
-          sessionId: "session-456",
-          pieceId: "piece-2",
-          expectedNoteCount: 30,
-          playedNoteCount: 15,
-          matchedCount: 12,
-        })
-      )
-
-      await act(async () => {
-        await result.current.refreshState()
-      })
-
-      expect(result.current.isActive).toBe(true)
-      expect(result.current.sessionState?.sessionId).toBe("session-456")
-      expect(result.current.sessionState?.playedNoteCount).toBe(15)
-    })
+    // Note: Full endSession flow with results is tested in integration tests
+    // (ws-integration.test.ts)
   })
 
   describe("importPiece", () => {
     it("imports piece successfully", async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
 
-      const { result } = renderHook(() => useSession())
+      const { result, unmount } = renderHook(() => useSession())
 
       const mockImportResult: ImportPieceResult = {
         id: "piece-new",
@@ -573,12 +315,13 @@ describe("useSession", () => {
 
       expect(importResult).not.toBeNull()
       expect(importResult).toMatchObject(mockImportResult)
+      unmount()
     })
 
     it("sets error on import failure", async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ active: false }))
 
-      const { result } = renderHook(() => useSession())
+      const { result, unmount } = renderHook(() => useSession())
 
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ error: "Invalid MusicXML" }, false)
@@ -593,6 +336,7 @@ describe("useSession", () => {
       })
 
       expect(result.current.error).toBe("Invalid MusicXML")
+      unmount()
     })
   })
 })

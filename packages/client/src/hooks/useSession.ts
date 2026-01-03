@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
+import { useNoteStream, type SessionScore } from "./useNoteStream.js"
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001"
 const SESSION_API = `${API_BASE}/api/session`
@@ -16,19 +17,20 @@ export interface SessionStartParams {
 
 export interface SessionStartResult {
   sessionId: string
+  wsUrl?: string
   expectedNoteCount: number
   measureRange: [number, number]
 }
 
 export interface NoteSubmitResult {
   pitch: number
-  result: "correct" | "wrong" | "extra"
+  result: "correct" | "wrong" | "extra" | "early" | "late"
   timingOffset: number
   expectedNoteTime: number | null // original startTime from piece start (for Verovio UI mapping)
 }
 
 export interface SessionEndResult {
-  attemptId: string
+  attemptId?: string
   noteAccuracy: number
   timingAccuracy: number
   combinedScore: number
@@ -67,13 +69,15 @@ export interface ImportPieceResult {
 export interface UseSessionResult {
   isActive: boolean
   isLoading: boolean
+  wsConnected: boolean
+  wsReady: boolean
   error: string | null
   sessionState: SessionState | null
   lastNoteResult: NoteSubmitResult | null
   results: SessionEndResult | null
   importPiece: (params: ImportPieceParams) => Promise<ImportPieceResult | null>
   startSession: (params: SessionStartParams) => Promise<SessionStartResult | null>
-  submitNote: (pitch: number, velocity: number, on: boolean) => Promise<NoteSubmitResult | null>
+  submitNote: (pitch: number, velocity: number, on: boolean) => void
   endSession: () => Promise<SessionEndResult | null>
   refreshState: () => Promise<void>
 }
@@ -85,7 +89,61 @@ export function useSession(): UseSessionResult {
   const [sessionState, setSessionState] = useState<SessionState | null>(null)
   const [lastNoteResult, setLastNoteResult] = useState<NoteSubmitResult | null>(null)
   const [results, setResults] = useState<SessionEndResult | null>(null)
+  const [wsUrl, setWsUrl] = useState<string | null>(null)
   const sessionStartTime = useRef<number>(0)
+  const currentSessionId = useRef<string | null>(null)
+
+  // WebSocket note stream
+  const {
+    connected: wsConnected,
+    ready: wsReady,
+    sendNote,
+    lastResult: wsLastResult,
+    error: wsError,
+  } = useNoteStream(wsUrl, {
+    onError: (err) => setError(err.message),
+  })
+
+  // Sync WebSocket results to local state
+  useEffect(() => {
+    if (wsLastResult) {
+      const result: NoteSubmitResult = {
+        pitch: wsLastResult.pitch,
+        result: wsLastResult.result,
+        timingOffset: wsLastResult.timingOffset,
+        expectedNoteTime: wsLastResult.expectedNoteTime,
+      }
+      setLastNoteResult(result)
+
+      // Update counts for correct notes
+      if (wsLastResult.result === "correct") {
+        setSessionState((prev) => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            playedNoteCount: (prev.playedNoteCount ?? 0) + 1,
+            matchedCount: (prev.matchedCount ?? 0) + 1,
+          }
+        })
+      } else if (wsLastResult.result !== "extra") {
+        // Track played notes (excluding extra)
+        setSessionState((prev) => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            playedNoteCount: (prev.playedNoteCount ?? 0) + 1,
+          }
+        })
+      }
+    }
+  }, [wsLastResult])
+
+  // Sync WebSocket error
+  useEffect(() => {
+    if (wsError) {
+      setError(wsError)
+    }
+  }, [wsError])
 
   const importPiece = useCallback(async (params: ImportPieceParams): Promise<ImportPieceResult | null> => {
     try {
@@ -113,21 +171,30 @@ export function useSession(): UseSessionResult {
     setError(null)
     setResults(null)
     setLastNoteResult(null)
+    setWsUrl(null)
 
     try {
-      const response = await fetch(`${SESSION_API}/start`, {
+      // Use WebSocket session start endpoint
+      const response = await fetch(`${SESSION_API}/ws/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params),
       })
 
-      const data = await response.json()
+      const data = (await response.json()) as SessionStartResult & { wsUrl?: string; error?: string }
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to start session")
       }
 
       sessionStartTime.current = Date.now()
+      currentSessionId.current = data.sessionId
+
+      // Set WebSocket URL to trigger connection
+      if (data.wsUrl) {
+        setWsUrl(data.wsUrl)
+      }
+
       setIsActive(true)
       setSessionState({
         active: true,
@@ -141,7 +208,7 @@ export function useSession(): UseSessionResult {
         tempo: params.tempo,
       })
 
-      return data as SessionStartResult
+      return data
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error")
       return null
@@ -150,76 +217,55 @@ export function useSession(): UseSessionResult {
     }
   }, [])
 
-  const submitNote = useCallback(async (
-    pitch: number,
-    velocity: number,
-    on: boolean
-  ): Promise<NoteSubmitResult | null> => {
-    if (!isActive) return null
+  const submitNote = useCallback(
+    (pitch: number, velocity: number, on: boolean): void => {
+      if (!isActive || !wsReady) return
 
-    // Calculate timestamp relative to session start
-    const timestamp = Date.now() - sessionStartTime.current
-
-    try {
-      const response = await fetch(`${SESSION_API}/note`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pitch, velocity, timestamp, on }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        console.error("Note submit error:", data.error)
-        return null
-      }
-
-      const result = data as NoteSubmitResult
-      setLastNoteResult(result)
-
-      // Update local session state counts
-      if (on) {
-        setSessionState((prev) => {
-          if (!prev) return prev
-          const newMatchedCount = result.result === "correct"
-            ? (prev.matchedCount ?? 0) + 1
-            : (prev.matchedCount ?? 0)
-          return {
-            ...prev,
-            playedNoteCount: (prev.playedNoteCount ?? 0) + 1,
-            matchedCount: newMatchedCount,
-          }
-        })
-      }
-
-      return result
-    } catch (err) {
-      console.error("Note submit failed:", err)
-      return null
-    }
-  }, [isActive])
+      // Calculate timestamp relative to session start
+      const timestamp = Date.now() - sessionStartTime.current
+      sendNote(pitch, velocity, timestamp, on)
+    },
+    [isActive, wsReady, sendNote]
+  )
 
   const endSession = useCallback(async (): Promise<SessionEndResult | null> => {
-    if (!isActive) return null
+    if (!isActive || !currentSessionId.current) return null
 
     setIsLoading(true)
 
     try {
-      const response = await fetch(`${SESSION_API}/end`, {
+      // Use WebSocket session end endpoint
+      const response = await fetch(`${SESSION_API}/ws/${currentSessionId.current}/end`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       })
 
-      const data = await response.json()
+      const data = (await response.json()) as {
+        score: SessionScore
+        missedNotes: unknown[]
+        error?: string
+      }
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to end session")
       }
 
-      const result = data as SessionEndResult
+      // Convert WebSocket score format to SessionEndResult
+      const result: SessionEndResult = {
+        noteAccuracy: data.score.accuracy,
+        timingAccuracy: data.score.accuracy, // WebSocket mode doesn't separate these
+        combinedScore: data.score.accuracy,
+        leftHandAccuracy: null,
+        rightHandAccuracy: null,
+        extraNotes: data.score.extra,
+        missedNotes: data.missedNotes,
+      }
+
       setResults(result)
       setIsActive(false)
       setSessionState(null)
+      setWsUrl(null)
+      currentSessionId.current = null
 
       return result
     } catch (err) {
@@ -231,6 +277,10 @@ export function useSession(): UseSessionResult {
   }, [isActive])
 
   const refreshState = useCallback(async (): Promise<void> => {
+    // For WebSocket mode, we don't need to refresh from server
+    // State is maintained locally and via WebSocket
+    if (wsUrl) return
+
     try {
       const response = await fetch(`${SESSION_API}/state`)
       const data = await response.json()
@@ -242,7 +292,7 @@ export function useSession(): UseSessionResult {
     } catch (err) {
       console.error("Failed to refresh state:", err)
     }
-  }, [])
+  }, [wsUrl])
 
   // Check initial state on mount
   useEffect(() => {
@@ -250,17 +300,36 @@ export function useSession(): UseSessionResult {
   }, [refreshState])
 
   // Return memoized object to prevent unnecessary re-renders in consumers
-  return useMemo(() => ({
-    isActive,
-    isLoading,
-    error,
-    sessionState,
-    lastNoteResult,
-    results,
-    importPiece,
-    startSession,
-    submitNote,
-    endSession,
-    refreshState,
-  }), [isActive, isLoading, error, sessionState, lastNoteResult, results, importPiece, startSession, submitNote, endSession, refreshState])
+  return useMemo(
+    () => ({
+      isActive,
+      isLoading,
+      wsConnected,
+      wsReady,
+      error,
+      sessionState,
+      lastNoteResult,
+      results,
+      importPiece,
+      startSession,
+      submitNote,
+      endSession,
+      refreshState,
+    }),
+    [
+      isActive,
+      isLoading,
+      wsConnected,
+      wsReady,
+      error,
+      sessionState,
+      lastNoteResult,
+      results,
+      importPiece,
+      startSession,
+      submitNote,
+      endSession,
+      refreshState,
+    ]
+  )
 }

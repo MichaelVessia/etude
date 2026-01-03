@@ -10,6 +10,29 @@ import { MusicXmlServiceLive } from "./services/musicxml.js"
 import { PieceRepoLive } from "./repos/piece-repo.js"
 import { AttemptRepoLive } from "./repos/attempt-repo.js"
 import type { SessionDONamespace } from "./session-do.js"
+import type { NoteEvent, Hand, Milliseconds } from "@etude/shared"
+
+// Helper: filter notes by measure range
+function filterNotesByMeasures(
+  notes: NoteEvent[],
+  measureStart: number,
+  measureEnd: number
+): NoteEvent[] {
+  return notes.filter((n) => n.measure >= measureStart && n.measure <= measureEnd)
+}
+
+// Helper: adjust note timing relative to session start
+function adjustNoteTiming(notes: NoteEvent[], measureStart: number, tempo: number): NoteEvent[] {
+  const firstNote = notes.find((n) => n.measure >= measureStart)
+  const baseTime = firstNote?.startTime ?? 0
+  const tempoRatio = 100 / tempo
+
+  return notes.map((n) => ({
+    ...n,
+    startTime: ((n.startTime - baseTime) * tempoRatio) as Milliseconds,
+    duration: (n.duration * tempoRatio) as Milliseconds,
+  }))
+}
 
 // Re-export Durable Object for Cloudflare
 export { SessionDO } from "./session-do.js"
@@ -117,6 +140,88 @@ export default {
 
       const response = await doStub.fetch(new Request("http://do/ws/end", { method: "POST" }))
       return addCorsHeaders(response)
+    }
+
+    // WebSocket session start - combines piece lookup + DO init
+    // Path: /api/session/ws/start
+    if (url.pathname === "/api/session/ws/start" && request.method === "POST") {
+      try {
+        const body = (await request.json()) as {
+          pieceId: string
+          measureStart: number
+          measureEnd: number
+          hand: Hand
+          tempo: number
+        }
+
+        // Fetch piece notes from D1
+        const pieceResult = await env.DB.prepare("SELECT notes_json FROM pieces WHERE id = ?")
+          .bind(body.pieceId)
+          .first<{ notes_json: string }>()
+
+        if (!pieceResult) {
+          return addCorsHeaders(
+            Response.json({ error: "Piece not found" }, { status: 404 })
+          )
+        }
+
+        const allNotes = JSON.parse(pieceResult.notes_json) as NoteEvent[]
+
+        // Filter by measure range
+        const filteredNotes = filterNotesByMeasures(allNotes, body.measureStart, body.measureEnd)
+
+        // Filter by hand
+        const handFilteredNotes =
+          body.hand === "both" ? filteredNotes : filteredNotes.filter((n) => n.hand === body.hand)
+
+        // Adjust timing for tempo
+        const expectedNotes = adjustNoteTiming(handFilteredNotes, body.measureStart, body.tempo)
+
+        // Generate session ID
+        const sessionId = crypto.randomUUID()
+
+        // Initialize DO state
+        const doId = env.SESSION_DO.idFromName(sessionId)
+        const doStub = env.SESSION_DO.get(doId)
+
+        const initResponse = await doStub.fetch(
+          new Request("http://do/ws/init", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sessionId,
+              pieceId: body.pieceId,
+              expectedNotes,
+              originalNotes: handFilteredNotes, // Keep original times for UI mapping
+              measureStart: body.measureStart,
+              measureEnd: body.measureEnd,
+              hand: body.hand,
+              tempo: body.tempo,
+            }),
+          })
+        )
+
+        if (!initResponse.ok) {
+          const error = await initResponse.text()
+          return addCorsHeaders(Response.json({ error }, { status: 500 }))
+        }
+
+        // Build WebSocket URL
+        const wsProtocol = url.protocol === "https:" ? "wss:" : "ws:"
+        const wsUrl = `${wsProtocol}//${url.host}/api/session/ws/${sessionId}`
+
+        return addCorsHeaders(
+          Response.json({
+            sessionId,
+            wsUrl,
+            expectedNoteCount: expectedNotes.length,
+            measureRange: [body.measureStart, body.measureEnd],
+          })
+        )
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error"
+        return addCorsHeaders(Response.json({ error: message }, { status: 500 }))
+      }
     }
 
     // API routes - handled by Effect
