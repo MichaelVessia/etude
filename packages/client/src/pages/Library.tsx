@@ -28,7 +28,7 @@ const bundledPieces: PieceInfo[] = [
     composer: "Traditional",
     path: "/pieces/twinkle.xml",
     difficulty: "beginner",
-    measures: 24
+    measures: 12
   },
   {
     id: "simple-melody",
