@@ -1,0 +1,354 @@
+import { describe, expect, it, beforeEach, afterEach, mock } from "bun:test"
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react"
+import type { UseMidiResult } from "../../hooks/index.js"
+
+// Mock wouter - must export everything the module uses
+const mockNavigate = mock(() => {})
+let mockParamsId = "test-piece"
+
+// Export all the same things wouter exports
+mock.module("wouter", () => {
+  const React = require("react")
+  return {
+    useLocation: () => ["/practice/test-piece", mockNavigate],
+    useParams: () => ({ id: mockParamsId }),
+    useRouter: () => ({}),
+    useRoute: () => [false, null],
+    useSearch: () => "",
+    useSearchParams: () => [new URLSearchParams(), mock(() => {})],
+    Router: ({ children }: { children: React.ReactNode }) => children,
+    Route: ({ children }: { children: React.ReactNode }) => children,
+    Link: ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) =>
+      React.createElement("a", props, children),
+    Switch: ({ children }: { children: React.ReactNode }) => children,
+    Redirect: () => null,
+    matchRoute: () => [false, null],
+  }
+})
+
+// Mock CSS module
+mock.module("../Practice.module.css", () => ({
+  default: new Proxy({}, { get: () => "mock-class" }),
+}))
+
+// Mock session hook
+const mockSession = {
+  isActive: false,
+  isLoading: false,
+  error: null,
+  sessionState: null,
+  results: null,
+  lastNoteResult: null,
+  importPiece: mock(() => Promise.resolve({ id: "test-piece" })),
+  startSession: mock(() => Promise.resolve()),
+  endSession: mock(() => Promise.resolve()),
+  submitNote: mock(() => {}),
+}
+
+// Mock playhead hook
+const mockPlayhead = {
+  position: null,
+  isRunning: false,
+  currentTime: 0,
+  initialize: mock(() => {}),
+  start: mock(() => {}),
+  stop: mock(() => {}),
+  reset: mock(() => {}),
+}
+
+// Mock note coloring hook
+const mockNoteColoring = {
+  initializeNoteMap: mock(() => {}),
+  processNoteResult: mock(() => {}),
+  markMissedNotes: mock(() => {}),
+  resetColors: mock(() => {}),
+  reapplyColors: mock(() => {}),
+}
+
+// Mock extra notes hook
+const mockExtraNotes = {
+  extraNotes: [],
+  staffBounds: null,
+  initializePitchMap: mock(() => {}),
+  addExtraNote: mock(() => {}),
+  clear: mock(() => {}),
+}
+
+// Mock usePiece that reads from sessionStorage - inline in the hooks mock
+mock.module("../../hooks/index.js", () => {
+  const usePieceMock = (id: string) => {
+    const stored = sessionStorage.getItem("etude:currentPiece")
+    if (!stored) return { piece: null, error: "No piece selected" }
+    try {
+      const piece = JSON.parse(stored)
+      if (piece.id !== id && !id?.startsWith("custom-")) {
+        return { piece: null, error: "Piece not found" }
+      }
+      return { piece, error: null }
+    } catch {
+      return { piece: null, error: "Failed to parse piece" }
+    }
+  }
+
+  return {
+    useSession: () => mockSession,
+    usePlayhead: () => mockPlayhead,
+    useNoteColoring: () => mockNoteColoring,
+    useExtraNotes: () => mockExtraNotes,
+    usePiece: usePieceMock,
+    // Re-export types and other hooks that might be needed
+    useAudio: () => ({
+      isReady: true,
+      isPlaying: false,
+      loadMidi: () => {},
+      play: () => {},
+      pause: () => {},
+      stop: () => {},
+    }),
+    useMidi: () => ({
+      isSupported: true,
+      isConnected: false,
+      devices: [],
+      selectedDevice: null,
+      lastNote: null,
+      simulateNote: () => {},
+      enableSimulation: () => {},
+    }),
+    useVerovio: () => ({
+      isLoading: false,
+      isReady: true,
+      error: null,
+      svg: null,
+      pageCount: 1,
+      currentPage: 1,
+      loadMusicXml: () => {},
+      setPage: () => {},
+      setOptions: () => {},
+      getMidiBase64: () => null,
+      getTimeForElement: () => null,
+      getPageForElement: () => 1,
+      getNoteElements: () => [],
+    }),
+  }
+})
+
+// Mock SheetMusicView
+mock.module("../../components/SheetMusicView.js", () => ({
+  SheetMusicView: ({ musicXml }: { musicXml: string }) => (
+    <div data-testid="sheet-music">{musicXml ? "Sheet Music Loaded" : "No Music"}</div>
+  ),
+}))
+
+// Mock PracticeControls
+mock.module("../../components/PracticeControls.js", () => ({
+  PracticeControls: ({
+    isActive,
+    onStart,
+    onStop
+  }: {
+    isActive: boolean
+    onStart: () => void
+    onStop: () => void
+  }) => (
+    <div data-testid="practice-controls">
+      {isActive ? (
+        <button data-testid="stop-btn" onClick={onStop}>Stop</button>
+      ) : (
+        <button data-testid="start-btn" onClick={onStart}>Start</button>
+      )}
+    </div>
+  ),
+}))
+
+// Mock ResultsOverlay
+mock.module("../../components/ResultsOverlay.js", () => ({
+  ResultsOverlay: ({
+    onDismiss,
+    onRetry
+  }: {
+    onDismiss: () => void
+    onRetry: () => void
+  }) => (
+    <div data-testid="results-overlay">
+      <button onClick={onDismiss}>Dismiss</button>
+      <button onClick={onRetry}>Retry</button>
+    </div>
+  ),
+}))
+
+// Mock MidiSimulator (dev only)
+mock.module("../../components/dev/MidiSimulator.js", () => ({
+  MidiSimulator: () => null,
+}))
+
+// Import after mocks
+const { Practice } = await import("../Practice.js")
+
+function createMockMidi(overrides: Partial<UseMidiResult> = {}): UseMidiResult {
+  return {
+    isSupported: true,
+    isConnected: false,
+    devices: [],
+    selectedDevice: null,
+    lastNote: null,
+    simulateNote: mock(() => {}),
+    enableSimulation: mock(() => {}),
+    ...overrides,
+  }
+}
+
+const testPiece = {
+  id: "test-piece",
+  title: "Test Piece",
+  composer: "Test Composer",
+  path: "/test.xml",
+  xml: "<score>test</score>",
+  measures: 8,
+}
+
+describe("Practice", () => {
+  beforeEach(() => {
+    mockNavigate.mockClear()
+    mockSession.importPiece.mockClear()
+    mockSession.startSession.mockClear()
+    mockSession.endSession.mockClear()
+    mockSession.isActive = false
+    mockSession.isLoading = false
+    mockSession.results = null
+    mockSession.lastNoteResult = null
+    mockPlayhead.initialize.mockClear()
+    mockPlayhead.start.mockClear()
+    mockPlayhead.stop.mockClear()
+    mockPlayhead.reset.mockClear()
+    mockPlayhead.isRunning = false
+    mockPlayhead.position = null
+    mockNoteColoring.initializeNoteMap.mockClear()
+    mockNoteColoring.resetColors.mockClear()
+    mockExtraNotes.clear.mockClear()
+    mockParamsId = "test-piece"
+    sessionStorage.clear()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  describe("error states", () => {
+    it("shows error when piece not found", () => {
+      // No piece in sessionStorage
+      const midi = createMockMidi()
+      render(<Practice midi={midi} />)
+
+      expect(screen.getByText("Unable to Load Piece")).toBeTruthy()
+      expect(screen.getByText("No piece selected")).toBeTruthy()
+    })
+
+    it("shows return to library button on error", () => {
+      const midi = createMockMidi()
+      render(<Practice midi={midi} />)
+
+      const backButton = screen.getByText("Return to Library")
+      expect(backButton).toBeTruthy()
+
+      fireEvent.click(backButton)
+      expect(mockNavigate).toHaveBeenCalledWith("/")
+    })
+  })
+
+  describe("with piece loaded", () => {
+    beforeEach(() => {
+      sessionStorage.setItem("etude:currentPiece", JSON.stringify(testPiece))
+    })
+
+    it("renders piece title and composer", () => {
+      const midi = createMockMidi()
+      render(<Practice midi={midi} />)
+
+      expect(screen.getByText("Test Piece")).toBeTruthy()
+      expect(screen.getByText("Test Composer")).toBeTruthy()
+    })
+
+    it("renders sheet music view", () => {
+      const midi = createMockMidi()
+      render(<Practice midi={midi} />)
+
+      expect(screen.getByTestId("sheet-music")).toBeTruthy()
+    })
+
+    it("renders practice controls", () => {
+      const midi = createMockMidi()
+      render(<Practice midi={midi} />)
+
+      expect(screen.getByTestId("practice-controls")).toBeTruthy()
+    })
+
+    it("shows back button to library", () => {
+      const midi = createMockMidi()
+      render(<Practice midi={midi} />)
+
+      const backButton = screen.getByText("Library")
+      expect(backButton).toBeTruthy()
+
+      fireEvent.click(backButton.closest("button")!)
+      expect(mockNavigate).toHaveBeenCalledWith("/")
+    })
+
+    it("shows MIDI connection status - not connected", () => {
+      const midi = createMockMidi({ isConnected: false })
+      render(<Practice midi={midi} />)
+
+      expect(screen.getByText("No MIDI")).toBeTruthy()
+    })
+
+    it("shows MIDI ready when connected", () => {
+      const midi = createMockMidi({ isConnected: true })
+      render(<Practice midi={midi} />)
+
+      expect(screen.getByText("MIDI Ready")).toBeTruthy()
+    })
+  })
+
+  describe("practice session", () => {
+    beforeEach(() => {
+      sessionStorage.setItem("etude:currentPiece", JSON.stringify(testPiece))
+    })
+
+    it("calls importPiece and startSession on start", async () => {
+      const midi = createMockMidi()
+      render(<Practice midi={midi} />)
+
+      const startButton = screen.getByTestId("start-btn")
+      fireEvent.click(startButton)
+
+      await waitFor(() => {
+        expect(mockSession.importPiece).toHaveBeenCalled()
+      })
+    })
+
+    it("calls endSession on stop", async () => {
+      mockSession.isActive = true
+      const midi = createMockMidi()
+      render(<Practice midi={midi} />)
+
+      const stopButton = screen.getByTestId("stop-btn")
+      fireEvent.click(stopButton)
+
+      await waitFor(() => {
+        expect(mockSession.endSession).toHaveBeenCalled()
+      })
+    })
+  })
+
+  describe("results overlay", () => {
+    beforeEach(() => {
+      sessionStorage.setItem("etude:currentPiece", JSON.stringify(testPiece))
+    })
+
+    it("does not show results by default", () => {
+      const midi = createMockMidi()
+      render(<Practice midi={midi} />)
+
+      expect(screen.queryByTestId("results-overlay")).toBeNull()
+    })
+  })
+})

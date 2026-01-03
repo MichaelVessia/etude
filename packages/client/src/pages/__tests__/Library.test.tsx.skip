@@ -1,0 +1,252 @@
+import { describe, expect, it, beforeEach, afterEach, mock } from "bun:test"
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react"
+import type { UseMidiResult, MidiDevice } from "../../hooks/index.js"
+
+// Mock wouter - export all used hooks to prevent conflicts with other tests
+const mockNavigate = mock(() => {})
+mock.module("wouter", () => {
+  const React = require("react")
+  return {
+    useLocation: () => ["/", mockNavigate],
+    useParams: () => ({}),
+    useRouter: () => ({}),
+    useRoute: () => [false, null],
+    useSearch: () => "",
+    useSearchParams: () => [new URLSearchParams(), () => {}],
+    Router: ({ children }: { children: React.ReactNode }) => children,
+    Route: ({ children }: { children: React.ReactNode }) => children,
+    Link: ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) =>
+      React.createElement("a", props, children),
+    Switch: ({ children }: { children: React.ReactNode }) => children,
+    Redirect: () => null,
+    matchRoute: () => [false, null],
+  }
+})
+
+// Import after mocks
+const { Library } = await import("../Library.js")
+
+// Mock fetch
+const originalFetch = globalThis.fetch
+
+function createMockMidi(overrides: Partial<UseMidiResult> = {}): UseMidiResult {
+  return {
+    isSupported: true,
+    isConnected: false,
+    devices: [],
+    selectedDevice: null,
+    lastNote: null,
+    simulateNote: mock(() => {}),
+    enableSimulation: mock(() => {}),
+    ...overrides,
+  }
+}
+
+function createMockDevice(overrides: Partial<MidiDevice> = {}): MidiDevice {
+  return {
+    id: "device-1",
+    name: "Test Keyboard",
+    manufacturer: "Test Corp",
+    ...overrides,
+  }
+}
+
+describe("Library", () => {
+  beforeEach(() => {
+    mockNavigate.mockClear()
+    sessionStorage.clear()
+    // Mock fetch for loading pieces
+    globalThis.fetch = mock((url: string) => {
+      return Promise.resolve({
+        ok: true,
+        text: () => Promise.resolve("<score>mock xml</score>"),
+        statusText: "OK",
+      } as Response)
+    }) as unknown as typeof fetch
+  })
+
+  afterEach(() => {
+    cleanup()
+    globalThis.fetch = originalFetch
+  })
+
+  describe("rendering", () => {
+    it("renders the logo and title", () => {
+      const midi = createMockMidi()
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      expect(screen.getByText("Etude")).toBeTruthy()
+      expect(screen.getByText("Piano Practice")).toBeTruthy()
+      expect(screen.getByText("Your Library")).toBeTruthy()
+    })
+
+    it("renders bundled pieces", () => {
+      const midi = createMockMidi()
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      expect(screen.getByText("C Major Scale")).toBeTruthy()
+      expect(screen.getByText("Twinkle Twinkle Little Star")).toBeTruthy()
+      expect(screen.getByText("Simple Melody")).toBeTruthy()
+    })
+
+    it("renders piece metadata", () => {
+      const midi = createMockMidi()
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      expect(screen.getByText("Exercise")).toBeTruthy()
+      expect(screen.getByText("Traditional")).toBeTruthy()
+      expect(screen.getByText("Test")).toBeTruthy()
+    })
+
+    it("renders upload card", () => {
+      const midi = createMockMidi()
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      expect(screen.getByText("Add MusicXML")).toBeTruthy()
+      expect(screen.getByText("Upload your own sheet music")).toBeTruthy()
+    })
+  })
+
+  describe("MIDI status", () => {
+    it("shows MIDI not supported warning", () => {
+      const midi = createMockMidi({ isSupported: false })
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      expect(screen.getByText(/Web MIDI is not supported/)).toBeTruthy()
+    })
+
+    it("does not show warning when MIDI is supported", () => {
+      const midi = createMockMidi({ isSupported: true })
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      expect(screen.queryByText(/Web MIDI is not supported/)).toBeNull()
+    })
+
+    it("shows connected device status", () => {
+      const device = createMockDevice({ name: "My Piano" })
+      const midi = createMockMidi({
+        isConnected: true,
+        selectedDevice: device,
+      })
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      expect(screen.getByText("My Piano")).toBeTruthy()
+    })
+  })
+
+  describe("device selector", () => {
+    it("shows device dropdown when clicking MIDI badge", () => {
+      const device = createMockDevice()
+      const midi = createMockMidi({ devices: [device] })
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      // Click the MIDI status badge (contains "No MIDI Device")
+      const badge = screen.getByText("No MIDI Device").closest("button")!
+      fireEvent.click(badge)
+
+      expect(screen.getByText("Select MIDI Device")).toBeTruthy()
+      expect(screen.getByText("Test Keyboard")).toBeTruthy()
+    })
+
+    it("shows empty device message when no devices", () => {
+      const midi = createMockMidi({ devices: [] })
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      // Click the MIDI status badge
+      const badge = screen.getByText("No MIDI Device").closest("button")!
+      fireEvent.click(badge)
+
+      expect(screen.getByText(/No MIDI devices found/)).toBeTruthy()
+    })
+
+    it("calls onSelectDevice when selecting a device", () => {
+      const device = createMockDevice({ id: "my-device-id" })
+      const midi = createMockMidi({ devices: [device] })
+      const onSelectDevice = mock(() => {})
+      render(<Library midi={midi} onSelectDevice={onSelectDevice} />)
+
+      // Click the MIDI status badge to open dropdown
+      const badge = screen.getByText("No MIDI Device").closest("button")!
+      fireEvent.click(badge)
+
+      // Click the device
+      const deviceButton = screen.getByText("Test Keyboard")
+      fireEvent.click(deviceButton)
+
+      expect(onSelectDevice).toHaveBeenCalledWith("my-device-id")
+    })
+  })
+
+  describe("piece selection", () => {
+    it("loads piece and navigates on click", async () => {
+      const midi = createMockMidi()
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      // Click on a piece
+      const pieceCard = screen.getByText("C Major Scale").closest("button")!
+      fireEvent.click(pieceCard)
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith("/practice/c-major-scale")
+      })
+
+      // Check sessionStorage
+      const stored = sessionStorage.getItem("etude:currentPiece")
+      expect(stored).not.toBeNull()
+      const parsed = JSON.parse(stored!)
+      expect(parsed.id).toBe("c-major-scale")
+      expect(parsed.xml).toBe("<score>mock xml</score>")
+    })
+
+    it("shows error on fetch failure", async () => {
+      globalThis.fetch = mock(() => {
+        return Promise.resolve({
+          ok: false,
+          statusText: "Not Found",
+        } as Response)
+      }) as unknown as typeof fetch
+
+      const midi = createMockMidi()
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      const pieceCard = screen.getByText("C Major Scale").closest("button")!
+      fireEvent.click(pieceCard)
+
+      await waitFor(() => {
+        expect(screen.getByText(/Failed to load/)).toBeTruthy()
+      })
+
+      expect(mockNavigate).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("custom file upload", () => {
+    it("has file input for MusicXML upload", () => {
+      const midi = createMockMidi()
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      const input = document.querySelector('input[type="file"]')
+      expect(input).not.toBeNull()
+      expect(input?.getAttribute("accept")).toBe(".xml,.musicxml")
+    })
+  })
+
+  describe("difficulty badges", () => {
+    it("displays beginner difficulty badge", () => {
+      const midi = createMockMidi()
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      const beginnerBadges = screen.getAllByText("Beginner")
+      expect(beginnerBadges.length).toBeGreaterThan(0)
+    })
+
+    it("displays measure count", () => {
+      const midi = createMockMidi()
+      render(<Library midi={midi} onSelectDevice={mock(() => {})} />)
+
+      expect(screen.getByText("4 measures")).toBeTruthy()
+      expect(screen.getByText("24 measures")).toBeTruthy()
+      expect(screen.getByText("8 measures")).toBeTruthy()
+    })
+  })
+})
