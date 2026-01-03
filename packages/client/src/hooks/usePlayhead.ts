@@ -25,12 +25,16 @@ export interface UsePlayheadResult {
   reset: () => void
 }
 
-interface NotePosition {
+// Stores position as ratio (0-1) relative to SVG for resize-resilience
+interface NotePositionRatio {
   time: number
-  x: number
-  y: number
-  height: number
+  xRatio: number // 0-1 relative to SVG width
   page: number
+}
+
+interface StaffBoundsRatio {
+  yRatio: number // 0-1 relative to SVG height
+  heightRatio: number // 0-1 relative to SVG height
 }
 
 export function usePlayhead(
@@ -42,14 +46,16 @@ export function usePlayhead(
   const [isRunning, setIsRunning] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
 
-  // Track note positions sorted by time
-  const notePositionsRef = useRef<NotePosition[]>([])
+  // Track note positions as ratios sorted by time
+  const notePositionRatiosRef = useRef<NotePositionRatio[]>([])
+  // Staff bounds as ratios
+  const staffBoundsRatioRef = useRef<StaffBoundsRatio | null>(null)
   // Animation state
   const animationRef = useRef<number | null>(null)
   const startTimeRef = useRef<number>(0)
   const tempoRef = useRef<number>(100)
   const lastTimeRef = useRef<number>(0)
-  const svgBoundsRef = useRef<DOMRect | null>(null)
+  const svgElementRef = useRef<SVGElement | null>(null)
   const isRunningRef = useRef(false)
   const currentPageRef = useRef(1)
 
@@ -63,9 +69,37 @@ export function usePlayhead(
     }
   }, [])
 
-  // Get X position for a given time by interpolating between notes
+  // Convert ratio position to pixel position using current SVG bounds
+  const ratioToPixel = useCallback((xRatio: number, page: number): PlayheadPosition | null => {
+    const staffBounds = staffBoundsRatioRef.current
+    if (!staffBounds) return null
+
+    // Query the SVG fresh each time to handle re-renders
+    // The stored ref can become stale when React reconciles
+    let svg = svgElementRef.current
+    if (!svg || !svg.isConnected) {
+      // Try to find the SVG in the DOM
+      const wrapper = document.querySelector('[class*="svgWrapper"]')
+      svg = wrapper?.querySelector('svg') ?? null
+      if (svg) svgElementRef.current = svg
+    }
+    if (!svg) return null
+
+    const svgBounds = svg.getBoundingClientRect()
+    // Guard against zero bounds (element not yet rendered or detached)
+    if (svgBounds.width === 0 || svgBounds.height === 0) return null
+
+    return {
+      x: xRatio * svgBounds.width,
+      y: staffBounds.yRatio * svgBounds.height,
+      height: staffBounds.heightRatio * svgBounds.height,
+      page,
+    }
+  }, [])
+
+  // Get position for a given time by interpolating between notes
   const getPositionAtTime = useCallback((time: number): PlayheadPosition | null => {
-    const positions = notePositionsRef.current
+    const positions = notePositionRatiosRef.current
     if (positions.length === 0) return null
 
     // Find the two notes we're between
@@ -83,22 +117,12 @@ export function usePlayhead(
 
     // If before first note, use first note position
     if (time <= prevNote.time) {
-      return {
-        x: prevNote.x,
-        y: prevNote.y,
-        height: prevNote.height,
-        page: prevNote.page,
-      }
+      return ratioToPixel(prevNote.xRatio, prevNote.page)
     }
 
     // If after last note, use last note position
     if (time >= nextNote.time) {
-      return {
-        x: nextNote.x,
-        y: nextNote.y,
-        height: nextNote.height,
-        page: nextNote.page,
-      }
+      return ratioToPixel(nextNote.xRatio, nextNote.page)
     }
 
     // Interpolate between notes
@@ -107,17 +131,13 @@ export function usePlayhead(
     // If notes are on different pages, just use the appropriate note's position
     if (prevNote.page !== nextNote.page) {
       return progress < 0.5
-        ? { x: prevNote.x, y: prevNote.y, height: prevNote.height, page: prevNote.page }
-        : { x: nextNote.x, y: nextNote.y, height: nextNote.height, page: nextNote.page }
+        ? ratioToPixel(prevNote.xRatio, prevNote.page)
+        : ratioToPixel(nextNote.xRatio, nextNote.page)
     }
 
-    return {
-      x: prevNote.x + (nextNote.x - prevNote.x) * progress,
-      y: Math.min(prevNote.y, nextNote.y),
-      height: Math.max(prevNote.height, nextNote.height),
-      page: prevNote.page,
-    }
-  }, [])
+    const xRatio = prevNote.xRatio + (nextNote.xRatio - prevNote.xRatio) * progress
+    return ratioToPixel(xRatio, prevNote.page)
+  }, [ratioToPixel])
 
   // Animation frame callback
   const animate = useCallback(() => {
@@ -143,7 +163,7 @@ export function usePlayhead(
     }
 
     // Check if we've reached the end
-    const positions = notePositionsRef.current
+    const positions = notePositionRatiosRef.current
     if (positions.length > 0) {
       const lastNote = positions[positions.length - 1]!
       // Add some buffer time after last note
@@ -171,62 +191,69 @@ export function usePlayhead(
 
   // Initialize with note positions from Verovio
   const initialize = useCallback((noteElements: NoteElementInfo[], svgElement: SVGElement) => {
-    const positions: NotePosition[] = []
+    svgElementRef.current = svgElement
     const svgBounds = svgElement.getBoundingClientRect()
-    svgBoundsRef.current = svgBounds
 
-    // Calculate full staff height (min Y to max Y+height of all notes)
-    let minY = Infinity
-    let maxY = 0
+    // Find staff elements to get vertical bounds
+    // Verovio generates <g class="staff"> elements containing staff lines
+    const staffElements = svgElement.querySelectorAll(".staff")
+    let staffMinY = Infinity
+    let staffMaxY = 0
 
+    staffElements.forEach(staff => {
+      const staffBounds = staff.getBoundingClientRect()
+      const relY = staffBounds.top - svgBounds.top
+      staffMinY = Math.min(staffMinY, relY)
+      staffMaxY = Math.max(staffMaxY, relY + staffBounds.height)
+    })
+
+    // Fallback: if no staff elements found, derive from notes
+    if (staffMinY === Infinity) {
+      for (const note of noteElements) {
+        const el = document.getElementById(note.elementId)
+        if (!el) continue
+        const bounds = el.getBoundingClientRect()
+        const y = bounds.top - svgBounds.top
+        staffMinY = Math.min(staffMinY, y)
+        staffMaxY = Math.max(staffMaxY, y + bounds.height)
+      }
+    }
+
+    // Store staff bounds as ratios
+    const yRatio = staffMinY === Infinity ? 0 : staffMinY / svgBounds.height
+    const heightRatio = staffMaxY > staffMinY ? (staffMaxY - staffMinY) / svgBounds.height : 0.5
+    staffBoundsRatioRef.current = { yRatio, heightRatio }
+
+    // Build note position ratios
+    const positions: NotePositionRatio[] = []
     for (const note of noteElements) {
       const el = document.getElementById(note.elementId)
       if (!el) continue
 
       const bounds = el.getBoundingClientRect()
-      // Convert to coordinates relative to SVG
-      const x = bounds.left - svgBounds.left + bounds.width / 2
-      const y = bounds.top - svgBounds.top
-      const height = bounds.height
-
-      // Track vertical extent
-      minY = Math.min(minY, y)
-      maxY = Math.max(maxY, y + height)
+      // X position as ratio of SVG width (center of note)
+      const xRatio = (bounds.left - svgBounds.left + bounds.width / 2) / svgBounds.width
 
       positions.push({
         time: note.onset,
-        x,
-        y,
-        height,
+        xRatio,
         page: note.page,
       })
     }
 
-    // Calculate fixed Y and height to span all notes
-    const fixedY = minY === Infinity ? 0 : minY
-    const fixedHeight = maxY > minY ? maxY - minY : 100
-
-    // Update positions to use consistent Y/height (playhead spans full staff)
-    for (const pos of positions) {
-      pos.y = fixedY
-      pos.height = fixedHeight
-    }
-
     // Sort by time
     positions.sort((a, b) => a.time - b.time)
-    notePositionsRef.current = positions
+    notePositionRatiosRef.current = positions
 
     // Set initial position
     if (positions.length > 0) {
       const first = positions[0]!
-      setPosition({
-        x: first.x,
-        y: first.y,
-        height: first.height,
-        page: first.page,
-      })
+      const initialPos = ratioToPixel(first.xRatio, first.page)
+      if (initialPos) {
+        setPosition(initialPos)
+      }
     }
-  }, [])
+  }, [ratioToPixel])
 
   // Start playhead
   const start = useCallback((tempoPercent: number) => {
@@ -247,17 +274,15 @@ export function usePlayhead(
     setCurrentTime(0)
     lastTimeRef.current = 0
     currentPageRef.current = 1
-    const positions = notePositionsRef.current
+    const positions = notePositionRatiosRef.current
     if (positions.length > 0) {
       const first = positions[0]!
-      setPosition({
-        x: first.x,
-        y: first.y,
-        height: first.height,
-        page: first.page,
-      })
+      const initialPos = ratioToPixel(first.xRatio, first.page)
+      if (initialPos) {
+        setPosition(initialPos)
+      }
     }
-  }, [stop])
+  }, [stop, ratioToPixel])
 
   // Return memoized object - changes when state or methods change
   return useMemo(() => ({

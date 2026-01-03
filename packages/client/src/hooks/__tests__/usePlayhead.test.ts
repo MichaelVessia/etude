@@ -110,7 +110,7 @@ describe("usePlayhead", () => {
 
       expect(result.current.position).not.toBeNull()
       // x should be center of note1 (100 + 20/2 = 110)
-      expect(result.current.position!.x).toBe(110)
+      expect(result.current.position!.x).toBeCloseTo(110)
       expect(result.current.position!.page).toBe(1)
     })
 
@@ -131,7 +131,7 @@ describe("usePlayhead", () => {
       })
 
       // Position should be at note2 (the first by time)
-      expect(result.current.position!.x).toBe(110) // 100 + 20/2
+      expect(result.current.position!.x).toBeCloseTo(110) // 100 + 20/2
     })
 
     it("handles empty note list", () => {
@@ -238,7 +238,7 @@ describe("usePlayhead", () => {
         result.current.reset()
       })
 
-      expect(result.current.position!.x).toBe(110) // First note position
+      expect(result.current.position!.x).toBeCloseTo(110) // First note position
     })
   })
 
@@ -311,7 +311,7 @@ describe("usePlayhead", () => {
       })
 
       // Initial position should be at first note
-      expect(result.current.position!.x).toBe(110)
+      expect(result.current.position!.x).toBeCloseTo(110)
     })
   })
 
@@ -404,7 +404,7 @@ describe("usePlayhead", () => {
 
       // Should still set position from note1
       expect(result.current.position).not.toBeNull()
-      expect(result.current.position!.x).toBe(110)
+      expect(result.current.position!.x).toBeCloseTo(110)
     })
   })
 
@@ -490,8 +490,8 @@ describe("usePlayhead", () => {
       })
 
       // Height should span from top of note1 (50) to bottom of note2 (140)
-      expect(result.current.position!.y).toBe(50)
-      expect(result.current.position!.height).toBe(90) // 140 - 50
+      expect(result.current.position!.y).toBeCloseTo(50)
+      expect(result.current.position!.height).toBeCloseTo(90) // 140 - 50
     })
   })
 })
