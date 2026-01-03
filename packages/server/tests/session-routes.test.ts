@@ -211,113 +211,6 @@ describe("Session Routes", () => {
     )
   })
 
-  describe("POST /api/session/note", () => {
-    it.effect("returns 400 when no session active", () =>
-      Effect.gen(function* () {
-        yield* setupTables
-
-        const request = makeRequest("POST", "/api/session/note", {
-          pitch: 60,
-          velocity: 80,
-          timestamp: 0,
-          on: true,
-        })
-        const { response, json } = yield* runRequestJson(request)
-
-        expect(response.status).toBe(400)
-        expect(json.error).toContain("NotStarted")
-      }).pipe(Effect.provide(TestServiceLayer))
-    )
-
-    it.effect("submits correct note", () =>
-      Effect.gen(function* () {
-        yield* setupTables
-        const piece = yield* createTestPiece()
-
-        // Start session
-        const startRequest = makeRequest("POST", "/api/session/start", {
-          pieceId: piece.id,
-          measureStart: 1,
-          measureEnd: 1,
-          hand: "right",
-          tempo: 100,
-        })
-        yield* runRequestJson(startRequest)
-
-        // Submit correct note (C4 = 60)
-        const noteRequest = makeRequest("POST", "/api/session/note", {
-          pitch: 60,
-          velocity: 80,
-          timestamp: 0,
-          on: true,
-        })
-        const { response, json } = yield* runRequestJson(noteRequest)
-
-        expect(response.status).toBe(200)
-        expect(json.pitch).toBe(60)
-        expect(json.result).toBe("correct")
-      }).pipe(Effect.provide(TestServiceLayer))
-    )
-
-    it.effect("submits wrong note", () =>
-      Effect.gen(function* () {
-        yield* setupTables
-        const piece = yield* createTestPiece()
-
-        // Start session
-        const startRequest = makeRequest("POST", "/api/session/start", {
-          pieceId: piece.id,
-          measureStart: 1,
-          measureEnd: 1,
-          hand: "right",
-          tempo: 100,
-        })
-        yield* runRequestJson(startRequest)
-
-        // Submit wrong note (A4 = 69 instead of C4 = 60)
-        const noteRequest = makeRequest("POST", "/api/session/note", {
-          pitch: 69,
-          velocity: 80,
-          timestamp: 0,
-          on: true,
-        })
-        const { response, json } = yield* runRequestJson(noteRequest)
-
-        expect(response.status).toBe(200)
-        expect(json.pitch).toBe(69)
-        expect(json.result).toBe("wrong")
-      }).pipe(Effect.provide(TestServiceLayer))
-    )
-
-    it.effect("handles note-off events", () =>
-      Effect.gen(function* () {
-        yield* setupTables
-        const piece = yield* createTestPiece()
-
-        // Start session
-        const startRequest = makeRequest("POST", "/api/session/start", {
-          pieceId: piece.id,
-          measureStart: 1,
-          measureEnd: 1,
-          hand: "right",
-          tempo: 100,
-        })
-        yield* runRequestJson(startRequest)
-
-        // Submit note-off
-        const noteRequest = makeRequest("POST", "/api/session/note", {
-          pitch: 60,
-          velocity: 0,
-          timestamp: 500,
-          on: false,
-        })
-        const { response, json } = yield* runRequestJson(noteRequest)
-
-        expect(response.status).toBe(200)
-        expect(json.pitch).toBe(60)
-      }).pipe(Effect.provide(TestServiceLayer))
-    )
-  })
 
   describe("POST /api/session/end", () => {
     it.effect("returns 400 when no session active", () =>
@@ -373,16 +266,16 @@ describe("Session Routes", () => {
         })
         yield* runRequestJson(startRequest)
 
-        // Play all correct notes
-        for (const pitch of [60, 62, 64, 65]) {
-          const noteRequest = makeRequest("POST", "/api/session/note", {
-            pitch,
-            velocity: 80,
-            timestamp: (pitch - 60) * 250, // roughly timed
-            on: true,
-          })
-          yield* runRequestJson(noteRequest)
-        }
+        // Play all correct notes via simulate endpoint
+        const simRequest = makeRequest("POST", "/api/session/simulate", {
+          notes: [
+            { pitch: 60, timestamp: 0 },
+            { pitch: 62, timestamp: 500 },
+            { pitch: 64, timestamp: 1000 },
+            { pitch: 65, timestamp: 1500 },
+          ],
+        })
+        yield* runRequestJson(simRequest)
 
         // End session
         const endRequest = makeRequest("POST", "/api/session/end")
@@ -468,14 +361,11 @@ describe("Session Routes", () => {
         })
         yield* runRequestJson(startRequest)
 
-        // Submit a note
-        const noteRequest = makeRequest("POST", "/api/session/note", {
-          pitch: 60,
-          velocity: 80,
-          timestamp: 0,
-          on: true,
+        // Submit a note via simulate endpoint
+        const simRequest = makeRequest("POST", "/api/session/simulate", {
+          notes: [{ pitch: 60, timestamp: 0 }],
         })
-        yield* runRequestJson(noteRequest)
+        yield* runRequestJson(simRequest)
 
         // Get state
         const stateRequest = makeRequest("GET", "/api/session/state")

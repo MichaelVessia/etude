@@ -3,10 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "./src/main.ts",
+  "main": "./src/worker.ts",
   "scripts": {
-    "dev": "bun --watch src/main.ts",
-    "start": "bun src/main.ts"
+    "dev": "wrangler dev --config ../../wrangler.toml"
   },
   "dependencies": {
     "@effect/platform": "*",

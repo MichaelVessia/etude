@@ -16,12 +16,6 @@ const StartSessionRequest = Schema.Struct({
   tempo: Schema.Number,
 })
 
-const SubmitNoteRequest = Schema.Struct({
-  pitch: Schema.Number,
-  velocity: Schema.Number,
-  timestamp: Schema.Number,
-  on: Schema.Boolean,
-})
 
 // For simulating a sequence of notes (testing)
 const SimulateNotesRequest = Schema.Struct({
@@ -55,26 +49,6 @@ const startSession = Effect.gen(function* () {
   )
 )
 
-// POST /note - Submit a played note
-const submitNote = Effect.gen(function* () {
-  const req = yield* HttpServerRequest.HttpServerRequest
-  const body = yield* req.json
-  const parsed = yield* Schema.decodeUnknown(SubmitNoteRequest)(body)
-  const session = yield* SessionService
-
-  const result = yield* session.submitNote(
-    parsed.pitch,
-    parsed.velocity,
-    parsed.timestamp,
-    parsed.on
-  )
-
-  return yield* HttpServerResponse.json(result)
-}).pipe(
-  Effect.catchAll((error) =>
-    HttpServerResponse.json({ error: String(error) }, { status: 400 })
-  )
-)
 
 // POST /end - End session and get results
 const endSession = Effect.gen(function* () {
@@ -158,7 +132,6 @@ const getExpected = Effect.gen(function* () {
 
 export const sessionRoutes = HttpRouter.empty.pipe(
   HttpRouter.post("/start", startSession),
-  HttpRouter.post("/note", submitNote),
   HttpRouter.post("/end", endSession),
   HttpRouter.get("/state", getState),
   HttpRouter.post("/simulate", simulateNotes),
