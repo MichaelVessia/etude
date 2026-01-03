@@ -32,6 +32,7 @@ const worker = await Worker("etude", {
     SESSION_DO: sessionDO,
     ASSETS: assets,
   },
+  adopt: true, // Adopt existing worker/domain from manual deployment
   domains: ["etude.vessia.net"],
   url: true, // Also enable workers.dev URL for testing
   compatibility: "node", // Node.js compatibility for Effect
