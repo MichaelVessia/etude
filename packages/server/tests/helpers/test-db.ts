@@ -17,7 +17,8 @@ export const setupTables = Effect.gen(function* () {
       total_measures integer NOT NULL,
       difficulty text,
       notes_json text NOT NULL,
-      added_at text NOT NULL
+      added_at text NOT NULL,
+      default_tempo integer DEFAULT 120
     )
   `
   yield* sql`

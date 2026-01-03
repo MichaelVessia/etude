@@ -2,9 +2,6 @@ import { useCallback, useMemo, useRef } from "react"
 import type { NoteElementInfo } from "./useVerovio.js"
 import type { NoteSubmitResult } from "./useSession.js"
 
-// Timing threshold in milliseconds
-const TIMING_TOLERANCE_MS = 150
-
 export type NoteColorState = "correct" | "wrong" | "missed" | "pending"
 
 export interface NoteColorInfo {
@@ -110,14 +107,8 @@ export function useNoteColoring(): UseNoteColoringResult {
     // Skip extra notes (no visual feedback on staff)
     if (result.result === "extra") return
 
-    // Determine color based on result
-    let state: NoteColorState
-    if (result.result === "correct") {
-      const absOffset = Math.abs(result.timingOffset)
-      state = absOffset <= TIMING_TOLERANCE_MS ? "correct" : "wrong"
-    } else {
-      state = "wrong"
-    }
+    // Trust server result directly
+    const state: NoteColorState = result.result === "correct" ? "correct" : "wrong"
 
     // Find the next uncolored note with this pitch
     const notesForPitch = pitchToNotesRef.current.get(result.pitch)
@@ -133,7 +124,7 @@ export function useNoteColoring(): UseNoteColoringResult {
 
   // Mark notes as missed when playhead passes them
   const markMissedNotes = useCallback((currentTime: number) => {
-    const graceMs = TIMING_TOLERANCE_MS // 150ms grace period
+    const graceMs = 300 // Match server timing threshold
 
     for (const note of allNotesRef.current) {
       const currentState = colorStateRef.current.get(note.elementId)

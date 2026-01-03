@@ -29,6 +29,7 @@ export function SheetMusicView({
   const containerRef = useRef<HTMLDivElement>(null)
   const noteElementsInitializedRef = useRef(false)
   const lastMusicXmlRef = useRef<string | null>(null)
+  const lastSvgRef = useRef<string | null>(null)
 
   const {
     isReady,
@@ -71,7 +72,17 @@ export function SheetMusicView({
 
   // Notify parent when note elements are ready for coloring
   useEffect(() => {
-    if (!svg || !onNoteElementsReady || noteElementsInitializedRef.current) {
+    if (!svg || !onNoteElementsReady) {
+      return
+    }
+
+    // Reset if svg changed (e.g., resize, page change)
+    if (svg !== lastSvgRef.current) {
+      noteElementsInitializedRef.current = false
+      lastSvgRef.current = svg
+    }
+
+    if (noteElementsInitializedRef.current) {
       return
     }
 

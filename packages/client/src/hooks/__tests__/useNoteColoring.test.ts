@@ -72,7 +72,7 @@ describe("useNoteColoring", () => {
       const noteResult: NoteSubmitResult = {
         pitch: 60,
         result: "correct",
-        timingOffset: 50, // within 150ms tolerance
+        timingOffset: 50,
         expectedNoteTime: 0,
       }
 
@@ -82,32 +82,6 @@ describe("useNoteColoring", () => {
 
       expect(getNoteColor("note1")).toBe("#16a34a") // green
       expect(result.current.getNoteStates().get("note1")?.state).toBe("correct")
-    })
-
-    it("colors note red for correct result outside timing tolerance", () => {
-      createMockNoteElement("note1")
-
-      const { result } = renderHook(() => useNoteColoring())
-
-      act(() => {
-        result.current.initializeNoteMap([
-          { elementId: "note1", pitch: 60, onset: 0, duration: 500, page: 1 },
-        ])
-      })
-
-      const noteResult: NoteSubmitResult = {
-        pitch: 60,
-        result: "correct",
-        timingOffset: 200, // outside 150ms tolerance
-        expectedNoteTime: 0,
-      }
-
-      act(() => {
-        result.current.processNoteResult(noteResult)
-      })
-
-      expect(getNoteColor("note1")).toBe("#dc2626") // red (wrong timing)
-      expect(result.current.getNoteStates().get("note1")?.state).toBe("wrong")
     })
 
     it("colors note red for wrong result", () => {
@@ -330,9 +304,9 @@ describe("useNoteColoring", () => {
         ])
       })
 
-      // Time passes note1's onset + grace period (150ms)
+      // Time passes note1's onset + grace period (300ms)
       act(() => {
-        result.current.markMissedNotes(200)
+        result.current.markMissedNotes(350)
       })
 
       expect(getNoteColor("note1")).toBe("#9ca3af") // gray (missed)
@@ -363,7 +337,7 @@ describe("useNoteColoring", () => {
 
       // Try to mark as missed
       act(() => {
-        result.current.markMissedNotes(200)
+        result.current.markMissedNotes(350)
       })
 
       // Should still be green (correct), not gray (missed)
