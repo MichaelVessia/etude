@@ -40,13 +40,33 @@ async function isWorkerRunning(): Promise<boolean> {
   }
 }
 
-// Helper to start a session via HTTP
-async function startSession(pieceId: string): Promise<{ sessionId: string; wsUrl: string }> {
-  const response = await fetch(`${WORKER_URL}/api/session/start`, {
+// Helper to start a session via HTTP (WebSocket mode)
+// This uses the new WebSocket-specific init endpoint
+async function startSession(
+  pieceId: string,
+  notes: typeof TEST_PIECE_NOTES = TEST_PIECE_NOTES
+): Promise<{ sessionId: string; wsUrl: string }> {
+  const sessionId = crypto.randomUUID()
+
+  // Convert test notes to NoteEvent format
+  const expectedNotes = notes.map((n) => ({
+    pitch: n.pitch,
+    startTime: n.startTime,
+    duration: n.duration,
+    measure: n.measure,
+    hand: n.hand,
+    voice: n.voice,
+  }))
+
+  // Initialize session state in DO
+  const response = await fetch(`${WORKER_URL}/api/session/ws/${sessionId}/init`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      sessionId,
       pieceId,
+      expectedNotes,
+      originalNotes: expectedNotes, // Same for testing
       measureStart: 1,
       measureEnd: 1,
       hand: "right",
@@ -56,23 +76,21 @@ async function startSession(pieceId: string): Promise<{ sessionId: string; wsUrl
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`Failed to start session: ${response.status} - ${text}`)
+    throw new Error(`Failed to init session: ${response.status} - ${text}`)
   }
 
-  const data = (await response.json()) as { sessionId: string; wsUrl?: string }
   return {
-    sessionId: data.sessionId,
-    wsUrl: data.wsUrl ?? `${WS_URL}/api/session/ws/${data.sessionId}`,
+    sessionId,
+    wsUrl: `${WS_URL}/api/session/ws/${sessionId}`,
   }
 }
 
-// Helper to end a session via HTTP
-async function endSession(): Promise<{
-  attemptId: string
-  noteAccuracy: number
+// Helper to end a session via HTTP (WebSocket mode)
+async function endSession(sessionId: string): Promise<{
+  score: { correct: number; accuracy: number; missed: number }
   missedNotes: unknown[]
 }> {
-  const response = await fetch(`${WORKER_URL}/api/session/end`, {
+  const response = await fetch(`${WORKER_URL}/api/session/ws/${sessionId}/end`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   })
@@ -82,7 +100,7 @@ async function endSession(): Promise<{
     throw new Error(`Failed to end session: ${response.status} - ${text}`)
   }
 
-  return (await response.json()) as { attemptId: string; noteAccuracy: number; missedNotes: unknown[] }
+  return (await response.json()) as { score: { correct: number; accuracy: number; missed: number }; missedNotes: unknown[] }
 }
 
 // Helper to connect WebSocket and wait for ready
@@ -148,31 +166,7 @@ function sendNote(
   })
 }
 
-// Helper to create a test piece directly
-async function createTestPiece(): Promise<string> {
-  const pieceId = crypto.randomUUID()
-
-  // Use the piece import endpoint
-  const response = await fetch(`${WORKER_URL}/api/piece/import`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: "Test Piece",
-      composer: "Test Composer",
-      filePath: `/test/${pieceId}.xml`,
-      totalMeasures: 1,
-      notes: TEST_PIECE_NOTES,
-    }),
-  })
-
-  if (response.ok) {
-    const data = (await response.json()) as { piece: { id: string } }
-    return data.piece.id
-  }
-
-  // If import endpoint doesn't work with direct notes, we need another approach
-  throw new Error(`Failed to create test piece: ${response.status} ${await response.text()}`)
-}
+// No need for createTestPiece - we pass notes directly to DO init
 
 // Check if worker is running before tests
 let workerAvailable = false
@@ -210,21 +204,21 @@ Skipping WebSocket integration tests.
   })
 
   describe("WebSocket connection lifecycle", () => {
-    it.skip("connects and receives ready message", async () => {
-      const pieceId = await createTestPiece()
-      const { wsUrl } = await startSession(pieceId)
+    it("connects and receives ready message", async () => {
+      if (!workerAvailable) return
+      const { sessionId, wsUrl } = await startSession("test-piece")
 
       const ws = await connectWebSocket(wsUrl)
       expect(ws.readyState).toBe(WebSocket.OPEN)
       ws.close()
 
-      // Cleanup - end session
-      await endSession().catch(() => {})
+      // Cleanup
+      await endSession(sessionId).catch(() => {})
     })
 
-    it.skip("rejects second connection to same session", async () => {
-      const pieceId = await createTestPiece()
-      const { wsUrl } = await startSession(pieceId)
+    it("rejects second connection to same session", async () => {
+      if (!workerAvailable) return
+      const { sessionId, wsUrl } = await startSession("test-piece")
 
       // First connection
       const ws1 = await connectWebSocket(wsUrl)
@@ -233,14 +227,14 @@ Skipping WebSocket integration tests.
       await expect(connectWebSocket(wsUrl)).rejects.toThrow()
 
       ws1.close()
-      await endSession().catch(() => {})
+      await endSession(sessionId).catch(() => {})
     })
   })
 
   describe("Note streaming", () => {
-    it.skip("receives correct result for correct note", async () => {
-      const pieceId = await createTestPiece()
-      const { wsUrl } = await startSession(pieceId)
+    it("receives correct result for correct note", async () => {
+      if (!workerAvailable) return
+      const { sessionId, wsUrl } = await startSession("test-piece")
       const ws = await connectWebSocket(wsUrl)
 
       // Send first note (C4 = pitch 60)
@@ -253,12 +247,12 @@ Skipping WebSocket integration tests.
       }
 
       ws.close()
-      await endSession().catch(() => {})
+      await endSession(sessionId).catch(() => {})
     })
 
-    it.skip("receives wrong result for incorrect note", async () => {
-      const pieceId = await createTestPiece()
-      const { wsUrl } = await startSession(pieceId)
+    it("receives wrong result for incorrect note", async () => {
+      if (!workerAvailable) return
+      const { sessionId, wsUrl } = await startSession("test-piece")
       const ws = await connectWebSocket(wsUrl)
 
       // Send wrong note (A4 = pitch 69 instead of C4 = 60)
@@ -271,12 +265,12 @@ Skipping WebSocket integration tests.
       }
 
       ws.close()
-      await endSession().catch(() => {})
+      await endSession(sessionId).catch(() => {})
     })
 
-    it.skip("streams multiple notes correctly", async () => {
-      const pieceId = await createTestPiece()
-      const { wsUrl } = await startSession(pieceId)
+    it("streams multiple notes correctly", async () => {
+      if (!workerAvailable) return
+      const { sessionId, wsUrl } = await startSession("test-piece")
       const ws = await connectWebSocket(wsUrl)
 
       // Play all 4 correct notes
@@ -295,14 +289,14 @@ Skipping WebSocket integration tests.
       }
 
       ws.close()
-      await endSession().catch(() => {})
+      await endSession(sessionId).catch(() => {})
     })
   })
 
   describe("Session end via HTTP", () => {
-    it.skip("persists attempt on session end", async () => {
-      const pieceId = await createTestPiece()
-      const { wsUrl } = await startSession(pieceId)
+    it("returns scores on session end", async () => {
+      if (!workerAvailable) return
+      const { sessionId, wsUrl } = await startSession("test-piece")
       const ws = await connectWebSocket(wsUrl)
 
       // Play all notes
@@ -311,26 +305,26 @@ Skipping WebSocket integration tests.
       }
 
       // End session via HTTP
-      const endResult = await endSession()
+      const endResult = await endSession(sessionId)
 
-      expect(endResult.attemptId).toBeDefined()
-      expect(endResult.noteAccuracy).toBe(1) // 100%
+      expect(endResult.score.correct).toBe(4)
+      expect(endResult.score.accuracy).toBe(1) // 100%
       expect(endResult.missedNotes).toHaveLength(0)
 
       ws.close()
     })
 
-    it.skip("sends sessionEnd message before closing", async () => {
-      const pieceId = await createTestPiece()
-      const { wsUrl } = await startSession(pieceId)
+    it("sends sessionEnd message before closing", async () => {
+      if (!workerAvailable) return
+      const { sessionId, wsUrl } = await startSession("test-piece")
       const ws = await connectWebSocket(wsUrl)
 
       // Collect all messages
       const messages: WsServerMessage[] = []
-      const originalHandler = ws.onmessage
+      const originalOnMessage = ws.onmessage
       ws.onmessage = (event) => {
         messages.push(JSON.parse(event.data as string))
-        if (originalHandler) originalHandler.call(ws, event)
+        if (originalOnMessage) originalOnMessage.call(ws, event)
       }
 
       // Play notes
@@ -339,7 +333,7 @@ Skipping WebSocket integration tests.
       }
 
       // End session - should trigger sessionEnd message
-      await endSession()
+      await endSession(sessionId)
 
       // Wait a bit for the message
       await new Promise((r) => setTimeout(r, 100))
@@ -355,13 +349,12 @@ Skipping WebSocket integration tests.
   })
 
   describe("Heartbeat", () => {
-    it.skip("responds to ping with pong", async () => {
-      const pieceId = await createTestPiece()
-      const { wsUrl } = await startSession(pieceId)
+    it("accepts pong messages", async () => {
+      if (!workerAvailable) return
+      const { sessionId, wsUrl } = await startSession("test-piece")
       const ws = await connectWebSocket(wsUrl)
 
-      // Client should respond to server ping
-      // For this test, we manually send a pong and verify no error
+      // Client sends pong (normally in response to server ping)
       const pongMsg: WsClientMessage = { type: "pong" }
       ws.send(JSON.stringify(pongMsg))
 
@@ -370,7 +363,7 @@ Skipping WebSocket integration tests.
       expect(ws.readyState).toBe(WebSocket.OPEN)
 
       ws.close()
-      await endSession().catch(() => {})
+      await endSession(sessionId).catch(() => {})
     })
   })
 })

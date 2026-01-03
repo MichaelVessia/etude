@@ -58,6 +58,67 @@ export default {
       return new Response("ok")
     }
 
+    // WebSocket upgrade for note stream
+    // Path: /api/session/ws/:sessionId
+    if (url.pathname.startsWith("/api/session/ws/") && request.headers.get("Upgrade") === "websocket") {
+      const sessionId = url.pathname.split("/").pop()
+      if (!sessionId) {
+        return new Response("Missing session ID", { status: 400 })
+      }
+
+      // Forward to Durable Object
+      const doId = env.SESSION_DO.idFromName(sessionId)
+      const doStub = env.SESSION_DO.get(doId)
+
+      // Forward WebSocket upgrade request to DO
+      return doStub.fetch(
+        new Request("http://do/ws", {
+          headers: request.headers,
+        })
+      )
+    }
+
+    // WebSocket session init - called before connecting WebSocket
+    // Path: /api/session/ws/:sessionId/init
+    if (url.pathname.match(/^\/api\/session\/ws\/[^/]+\/init$/) && request.method === "POST") {
+      const parts = url.pathname.split("/")
+      const sessionId = parts[parts.length - 2]
+      if (!sessionId) {
+        return new Response("Missing session ID", { status: 400 })
+      }
+
+      // Forward init request to DO
+      const doId = env.SESSION_DO.idFromName(sessionId)
+      const doStub = env.SESSION_DO.get(doId)
+
+      const response = await doStub.fetch(
+        new Request("http://do/ws/init", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: request.body,
+        })
+      )
+
+      return addCorsHeaders(response)
+    }
+
+    // WebSocket session end - called to end session and get results
+    // Path: /api/session/ws/:sessionId/end
+    if (url.pathname.match(/^\/api\/session\/ws\/[^/]+\/end$/) && request.method === "POST") {
+      const parts = url.pathname.split("/")
+      const sessionId = parts[parts.length - 2]
+      if (!sessionId) {
+        return new Response("Missing session ID", { status: 400 })
+      }
+
+      // Forward end request to DO
+      const doId = env.SESSION_DO.idFromName(sessionId)
+      const doStub = env.SESSION_DO.get(doId)
+
+      const response = await doStub.fetch(new Request("http://do/ws/end", { method: "POST" }))
+      return addCorsHeaders(response)
+    }
+
     // API routes - handled by Effect
     if (url.pathname.startsWith("/api/")) {
       try {
