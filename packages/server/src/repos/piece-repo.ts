@@ -10,6 +10,7 @@ import {
 import { PieceNotFound } from "@etude/shared"
 
 export interface PieceCreate {
+  id?: string
   name: string
   composer: string | null
   filePath: string
@@ -88,7 +89,7 @@ export const PieceRepoLive = Layer.effect(
 
       create: (piece: PieceCreate) =>
         Effect.gen(function* () {
-          const id = crypto.randomUUID() as PieceId
+          const id = (piece.id ?? crypto.randomUUID()) as PieceId
           const now = new Date().toISOString()
 
           yield* sql`

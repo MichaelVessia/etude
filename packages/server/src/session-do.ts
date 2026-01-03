@@ -84,7 +84,7 @@ export class SessionDO implements DurableObject {
     try {
       // WebSocket upgrade for note stream
       if (path === "/ws" && request.headers.get("Upgrade") === "websocket") {
-        return this.handleWebSocket()
+        return await this.handleWebSocket()
       }
 
       // HTTP endpoints for legacy state management
@@ -133,6 +133,19 @@ export class SessionDO implements DurableObject {
           startTime: Date.now(),
           firstNoteOffset: null,
         }
+
+        // Persist to storage for recovery in case DO is evicted
+        await this.state.storage.put("wsSession", {
+          sessionId: body.sessionId,
+          pieceId: body.pieceId,
+          expectedNotes: body.expectedNotes,
+          originalNotes: body.originalNotes,
+          measureStart: body.measureStart,
+          measureEnd: body.measureEnd,
+          hand: body.hand,
+          tempo: body.tempo,
+          startTime: this.sessionState.startTime,
+        })
 
         return Response.json({ ok: true, sessionId: body.sessionId })
       }
@@ -186,10 +199,37 @@ export class SessionDO implements DurableObject {
     }
   }
 
-  private handleWebSocket(): Response {
+  private async handleWebSocket(): Promise<Response> {
     // Block if session already has active connection
     if (this.activeWebSocket) {
       return new Response("Session already has active connection", { status: 409 })
+    }
+
+    // Try to restore session state from storage if not in memory
+    if (!this.sessionState) {
+      const stored = await this.state.storage.get<{
+        sessionId: string
+        pieceId: PieceId
+        expectedNotes: NoteEvent[]
+        originalNotes: NoteEvent[]
+        measureStart: number
+        measureEnd: number
+        hand: Hand
+        tempo: number
+        startTime: number
+      }>("wsSession")
+
+      if (stored) {
+        this.sessionState = {
+          ...stored,
+          matchedIndices: new Set(),
+          playedNotes: [],
+          matchResults: [],
+          firstNoteOffset: null,
+        }
+        // Clean up storage after restoring
+        await this.state.storage.delete("wsSession")
+      }
     }
 
     // Block if no session initialized

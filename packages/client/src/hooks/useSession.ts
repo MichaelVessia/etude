@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import { useNoteStream, type SessionScore } from "./useNoteStream.js"
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001"
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8787"
 const SESSION_API = `${API_BASE}/api/session`
 const PIECE_API = `${API_BASE}/api/piece`
 

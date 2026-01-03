@@ -32,8 +32,9 @@ const importPiece = Effect.gen(function* () {
   // Parse the MusicXML
   const parsedPiece = yield* musicXmlService.parse(parsed.xml, parsed.filePath)
 
-  // Create the piece in database
+  // Create the piece in database (use provided id if given)
   const piece = yield* pieceRepo.create({
+    id: parsed.id,
     name: parsedPiece.name,
     composer: parsedPiece.composer,
     filePath: parsed.filePath,
