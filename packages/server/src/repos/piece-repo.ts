@@ -17,6 +17,7 @@ export interface PieceCreate {
   totalMeasures: number
   difficulty: Difficulty | null
   notesJson: string
+  defaultTempo: number
 }
 
 export class PieceRepo extends Effect.Tag("PieceRepo")<
@@ -93,8 +94,8 @@ export const PieceRepoLive = Layer.effect(
           const now = new Date().toISOString()
 
           yield* sql`
-            INSERT INTO pieces (id, name, composer, file_path, total_measures, difficulty, notes_json, added_at)
-            VALUES (${id}, ${piece.name}, ${piece.composer}, ${piece.filePath}, ${piece.totalMeasures}, ${piece.difficulty}, ${piece.notesJson}, ${now})
+            INSERT INTO pieces (id, name, composer, file_path, total_measures, difficulty, notes_json, added_at, default_tempo)
+            VALUES (${id}, ${piece.name}, ${piece.composer}, ${piece.filePath}, ${piece.totalMeasures}, ${piece.difficulty}, ${piece.notesJson}, ${now}, ${piece.defaultTempo})
           `
 
           return new Piece({

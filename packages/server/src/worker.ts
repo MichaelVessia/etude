@@ -22,10 +22,16 @@ function filterNotesByMeasures(
 }
 
 // Helper: adjust note timing relative to session start
-function adjustNoteTiming(notes: NoteEvent[], measureStart: number, tempo: number): NoteEvent[] {
+function adjustNoteTiming(
+  notes: NoteEvent[],
+  measureStart: number,
+  userTempo: number,
+  originalTempo: number
+): NoteEvent[] {
   const firstNote = notes.find((n) => n.measure >= measureStart)
   const baseTime = firstNote?.startTime ?? 0
-  const tempoRatio = 100 / tempo
+  // Scale timing: if original is 120bpm and user wants 100bpm, notes should be 1.2x longer
+  const tempoRatio = originalTempo / userTempo
 
   return notes.map((n) => ({
     ...n,
@@ -154,10 +160,12 @@ export default {
           tempo: number
         }
 
-        // Fetch piece notes from D1
-        const pieceResult = await env.DB.prepare("SELECT notes_json FROM pieces WHERE id = ?")
+        // Fetch piece notes and default tempo from D1
+        const pieceResult = await env.DB.prepare(
+          "SELECT notes_json, default_tempo FROM pieces WHERE id = ?"
+        )
           .bind(body.pieceId)
-          .first<{ notes_json: string }>()
+          .first<{ notes_json: string; default_tempo: number | null }>()
 
         if (!pieceResult) {
           return addCorsHeaders(
@@ -166,6 +174,7 @@ export default {
         }
 
         const allNotes = JSON.parse(pieceResult.notes_json) as NoteEvent[]
+        const originalTempo = pieceResult.default_tempo ?? 120 // Default to 120 if not set
 
         // Filter by measure range
         const filteredNotes = filterNotesByMeasures(allNotes, body.measureStart, body.measureEnd)
@@ -175,7 +184,12 @@ export default {
           body.hand === "both" ? filteredNotes : filteredNotes.filter((n) => n.hand === body.hand)
 
         // Adjust timing for tempo
-        const expectedNotes = adjustNoteTiming(handFilteredNotes, body.measureStart, body.tempo)
+        const expectedNotes = adjustNoteTiming(
+          handFilteredNotes,
+          body.measureStart,
+          body.tempo,
+          originalTempo
+        )
 
         // Generate session ID
         const sessionId = crypto.randomUUID()

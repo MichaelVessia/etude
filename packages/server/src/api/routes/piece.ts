@@ -41,6 +41,7 @@ const importPiece = Effect.gen(function* () {
     totalMeasures: parsedPiece.totalMeasures,
     difficulty: null,
     notesJson: JSON.stringify(parsedPiece.notes),
+    defaultTempo: parsedPiece.defaultTempo,
   })
 
   return yield* HttpServerResponse.json({
