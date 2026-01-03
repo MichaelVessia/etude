@@ -38,6 +38,8 @@ bun run dev
 
 ## Architecture
 
+### Local Development
+
 ```mermaid
 graph TB
     subgraph Browser["Browser (localhost:5173)"]
@@ -68,6 +70,44 @@ graph TB
     Verovio --> UI
     ToneJS --> UI
 ```
+
+### Production (Cloudflare)
+
+```mermaid
+graph TB
+    subgraph Browser["Browser"]
+        UI[React SPA]
+        Verovio[Verovio WASM]
+        WebMIDI[Web MIDI API]
+        ToneJS[Tone.js Audio]
+    end
+
+    subgraph Cloudflare["Cloudflare Edge"]
+        subgraph Worker["Worker (etude)"]
+            Assets[Static Assets]
+            API[HTTP API]
+            Session[Session Service]
+        end
+        DO[("Durable Object\n(Session State)")]
+        D1[(D1 Database)]
+    end
+
+    MIDI[MIDI Keyboard] --> WebMIDI
+    WebMIDI --> UI
+    UI -->|"/"| Assets
+    UI -->|"/api/*"| API
+    API --> Session
+    Session --> DO
+    Session --> D1
+    Verovio --> UI
+    ToneJS --> UI
+```
+
+**Infrastructure:**
+- **Worker**: Single Cloudflare Worker serving both static SPA and API routes
+- **D1 Database**: SQLite-compatible database for pieces and attempts
+- **Durable Objects**: Persistent session state (replaces in-memory Ref from local dev)
+- **Custom Domain**: etude.vessia.net
 
 ### Data Flow
 
@@ -112,14 +152,20 @@ etude/
 │   │   │   ├── api/          # HTTP routes
 │   │   │   ├── services/     # Business logic
 │   │   │   ├── repos/        # Database access
-│   │   │   └── db/           # Schema & migrations
+│   │   │   ├── main.ts       # Local dev entry point
+│   │   │   ├── worker.ts     # Cloudflare Worker entry point
+│   │   │   ├── session-do.ts # Durable Object for session state
+│   │   │   ├── sql.ts        # SQLite layer (local)
+│   │   │   └── sql-d1.ts     # D1 layer (Cloudflare)
+│   │   ├── migrations/       # D1 database migrations
 │   │   └── package.json
 │   │
 │   └── shared/          # Shared types & schemas
 │       └── src/
 │           └── domain.ts     # Branded types, errors
 │
-├── pieces/              # MusicXML library
+├── alchemy.run.ts       # Infrastructure as Code
+├── .github/workflows/   # CI/CD
 └── package.json         # Workspace root
 ```
 
@@ -127,13 +173,16 @@ etude/
 
 | Layer | Technology |
 |-------|------------|
-| Runtime | Bun |
+| Runtime | Bun (local), Cloudflare Workers (prod) |
 | Backend Framework | Effect |
-| Database | SQLite (@effect/sql-sqlite-bun) |
+| Database | SQLite (local), D1 (prod) |
+| Session State | Ref (local), Durable Objects (prod) |
 | Frontend | React + Vite |
 | Sheet Music | Verovio (WASM) |
 | Audio | Tone.js |
 | MIDI | Web MIDI API |
+| IaC | Alchemy |
+| CI/CD | GitHub Actions |
 | Testing | bun:test + bun-test-effect |
 
 ## Development
@@ -151,6 +200,40 @@ bun run lint
 # Lint with auto-fix
 bun run lint:fix
 ```
+
+## Deployment
+
+Deployed to Cloudflare Workers via [Alchemy](https://alchemy.run) IaC.
+
+### CI/CD
+
+Pushes to `master` trigger automatic deployment via GitHub Actions:
+1. Type check
+2. Run tests
+3. Build client
+4. Deploy with Alchemy
+
+### Manual Deployment
+
+```bash
+# Deploy to dev stage
+ALCHEMY_STAGE=dev bun run alchemy.run.ts
+
+# Deploy to production
+ALCHEMY_STAGE=prod bun run alchemy.run.ts
+
+# Destroy a stage
+ALCHEMY_STAGE=dev bun run alchemy.run.ts --destroy
+```
+
+### Required Secrets (GitHub Actions)
+
+| Secret | Description |
+|--------|-------------|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token with Workers/D1/DNS permissions |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
+| `ALCHEMY_PASSWORD` | Encryption password for Alchemy state |
+| `ALCHEMY_STATE_TOKEN` | Token for CloudflareStateStore |
 
 ## How It Works
 
