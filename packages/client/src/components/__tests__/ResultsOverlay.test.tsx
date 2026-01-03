@@ -8,7 +8,7 @@ function createMockResults(overrides: Partial<SessionEndResult> = {}): SessionEn
     attemptId: "test-attempt-1",
     noteAccuracy: 0.85,
     timingAccuracy: 0.9,
-    combinedScore: 87,
+    combinedScore: 0.87, // 0-1 scale (87%)
     leftHandAccuracy: null,
     rightHandAccuracy: null,
     extraNotes: 0,
@@ -44,7 +44,7 @@ describe("ResultsOverlay", () => {
 
       render(
         <ResultsOverlay
-          results={createMockResults({ combinedScore: 87 })}
+          results={createMockResults({ combinedScore: 0.87 })}
           onDismiss={onDismiss}
           onRetry={onRetry}
         />
@@ -98,7 +98,7 @@ describe("ResultsOverlay", () => {
         />
       )
 
-      expect(screen.getByText("Review Score")).toBeTruthy()
+      expect(screen.getByText("View Sheet")).toBeTruthy()
       expect(screen.getByText("Try Again")).toBeTruthy()
     })
   })
@@ -110,7 +110,7 @@ describe("ResultsOverlay", () => {
 
       render(
         <ResultsOverlay
-          results={createMockResults({ combinedScore: 98 })}
+          results={createMockResults({ combinedScore: 0.98 })}
           onDismiss={onDismiss}
           onRetry={onRetry}
         />
@@ -125,7 +125,7 @@ describe("ResultsOverlay", () => {
 
       render(
         <ResultsOverlay
-          results={createMockResults({ combinedScore: 90 })}
+          results={createMockResults({ combinedScore: 0.90 })}
           onDismiss={onDismiss}
           onRetry={onRetry}
         />
@@ -140,7 +140,7 @@ describe("ResultsOverlay", () => {
 
       render(
         <ResultsOverlay
-          results={createMockResults({ combinedScore: 75 })}
+          results={createMockResults({ combinedScore: 0.75 })}
           onDismiss={onDismiss}
           onRetry={onRetry}
         />
@@ -155,7 +155,7 @@ describe("ResultsOverlay", () => {
 
       render(
         <ResultsOverlay
-          results={createMockResults({ combinedScore: 60 })}
+          results={createMockResults({ combinedScore: 0.60 })}
           onDismiss={onDismiss}
           onRetry={onRetry}
         />
@@ -170,7 +170,7 @@ describe("ResultsOverlay", () => {
 
       render(
         <ResultsOverlay
-          results={createMockResults({ combinedScore: 40 })}
+          results={createMockResults({ combinedScore: 0.40 })}
           onDismiss={onDismiss}
           onRetry={onRetry}
         />
@@ -272,7 +272,7 @@ describe("ResultsOverlay", () => {
   })
 
   describe("user interactions", () => {
-    it("calls onDismiss when Review Score button clicked", () => {
+    it("calls onDismiss when View Sheet button clicked", () => {
       const onDismiss = mock(() => {})
       const onRetry = mock(() => {})
 
@@ -284,7 +284,7 @@ describe("ResultsOverlay", () => {
         />
       )
 
-      fireEvent.click(screen.getByText("Review Score"))
+      fireEvent.click(screen.getByText("View Sheet"))
 
       expect(onDismiss).toHaveBeenCalledTimes(1)
     })

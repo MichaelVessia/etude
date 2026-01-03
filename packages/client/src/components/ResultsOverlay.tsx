@@ -10,7 +10,7 @@ interface ResultsOverlayProps {
 export function ResultsOverlay({ results, onDismiss, onRetry }: ResultsOverlayProps) {
   const notePercent = Math.round(results.noteAccuracy * 100)
   const timingPercent = Math.round(results.timingAccuracy * 100)
-  const overallPercent = Math.round(results.combinedScore)
+  const overallPercent = Math.round(results.combinedScore * 100)
 
   // Determine grade based on score
   const getGradeInfo = (score: number) => {
@@ -109,7 +109,7 @@ export function ResultsOverlay({ results, onDismiss, onRetry }: ResultsOverlayPr
         {/* Actions */}
         <div className={styles.actions}>
           <button className={styles.secondaryButton} onClick={onDismiss}>
-            Review Score
+            View Sheet
           </button>
           <button className={styles.primaryButton} onClick={onRetry}>
             Try Again

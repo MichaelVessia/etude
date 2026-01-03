@@ -56,8 +56,9 @@ export function Practice({ midi }: PracticeProps) {
   noteColoringRef.current = noteColoring
 
   // Re-apply note colors after each render (SVG gets replaced by React)
+  // Also reapply when reviewing results (session ended but results exist)
   useLayoutEffect(() => {
-    if (session.isActive) {
+    if (session.isActive || session.results) {
       noteColoringRef.current.reapplyColors()
     }
   })
