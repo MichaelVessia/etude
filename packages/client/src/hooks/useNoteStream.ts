@@ -42,6 +42,12 @@ export function useNoteStream(
   const retryCount = useRef(0)
   const retryTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Use refs for callbacks to avoid reconnection loops when callbacks change
+  const onErrorRef = useRef(onError)
+  const onCloseRef = useRef(onClose)
+  onErrorRef.current = onError
+  onCloseRef.current = onClose
+
   const [connected, setConnected] = useState(false)
   const [ready, setReady] = useState(false)
   const [lastResult, setLastResult] = useState<NoteResult | null>(null)
@@ -88,10 +94,10 @@ export function useNoteStream(
         }, delay)
       } else if (event.code !== 1000) {
         setError("Connection failed after retries")
-        onError?.(new Error("Connection failed after retries"))
+        onErrorRef.current?.(new Error("Connection failed after retries"))
       }
 
-      onClose?.()
+      onCloseRef.current?.()
     }
 
     ws.onerror = () => {
@@ -141,7 +147,7 @@ export function useNoteStream(
         // Log + ignore per spec
       }
     }
-  }, [wsUrl, maxRetries, cleanup, onError, onClose])
+  }, [wsUrl, maxRetries, cleanup]) // Removed onError, onClose - using refs instead
 
   // Connect when wsUrl changes
   useEffect(() => {
