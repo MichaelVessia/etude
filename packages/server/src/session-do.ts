@@ -304,11 +304,13 @@ export class SessionDO implements DurableObject {
     expectedNoteTime: number | null
   } {
     if (!this.sessionState) {
+      console.log("[DEBUG] processNote: no session state")
       return { pitch: note.pitch, result: "extra", timingOffset: 0, expectedNoteTime: null }
     }
 
     // Only process note-on events
     if (!note.on) {
+      console.log(`[DEBUG] processNote: note-off ignored pitch=${note.pitch}`)
       return { pitch: note.pitch, result: "extra", timingOffset: 0, expectedNoteTime: null }
     }
 
@@ -317,10 +319,12 @@ export class SessionDO implements DurableObject {
     if (firstNoteOffset === null && this.sessionState.expectedNotes.length > 0) {
       firstNoteOffset = note.timestamp
       this.sessionState.firstNoteOffset = firstNoteOffset
+      console.log(`[DEBUG] processNote: first note, offset=${firstNoteOffset}`)
     }
 
     // Adjust timestamp by the offset
     const adjustedTimestamp = note.timestamp - (firstNoteOffset ?? 0)
+    console.log(`[DEBUG] processNote: pitch=${note.pitch} raw=${note.timestamp} adjusted=${adjustedTimestamp}`)
 
     const playedNote = {
       pitch: note.pitch as MidiPitch,
@@ -373,7 +377,13 @@ export class SessionDO implements DurableObject {
         return true
       })
 
+    console.log(`[DEBUG] matchNote: played pitch=${playedNote.pitch} time=${playedNote.timestamp} eligible=${eligibleNotes.length}`)
+    if (eligibleNotes.length > 0 && eligibleNotes.length <= 10) {
+      console.log(`[DEBUG] matchNote: expected pitches=${eligibleNotes.map(e => `${e.note.pitch}@${e.note.startTime}`).join(",")}`)
+    }
+
     if (eligibleNotes.length === 0) {
+      console.log(`[DEBUG] matchNote: no eligible notes, result=extra`)
       return {
         playedNote,
         expectedNote: null,
@@ -383,15 +393,30 @@ export class SessionDO implements DurableObject {
     }
 
     // Find closest unmatched note with same pitch
+    // Strategy: prefer past notes (already due) over future notes, and among past notes prefer
+    // the earliest one (sequential order) to avoid "stealing" later notes when playing late
     let bestMatch: { note: NoteEvent; index: number } | null = null
-    let bestDistance = Infinity
+    let bestIsPast = false
 
     for (const { note, index } of eligibleNotes) {
       if (note.pitch === playedNote.pitch) {
-        const distance = Math.abs(playedNote.timestamp - note.startTime)
-        if (distance < bestDistance) {
-          bestDistance = distance
+        const isPast = note.startTime <= playedNote.timestamp
+
+        if (!bestMatch) {
+          // First match
           bestMatch = { note, index }
+          bestIsPast = isPast
+        } else {
+          // Priority: past notes first, then earliest by startTime (not closest by distance)
+          const shouldReplace =
+            (!bestIsPast && isPast) || // Prefer past over future
+            (isPast && bestIsPast && note.startTime < bestMatch.note.startTime) || // Among past: prefer earliest
+            (!isPast && !bestIsPast && note.startTime < bestMatch.note.startTime) // Among future: prefer earliest
+
+          if (shouldReplace) {
+            bestMatch = { note, index }
+            bestIsPast = isPast
+          }
         }
       }
     }
@@ -403,6 +428,7 @@ export class SessionDO implements DurableObject {
       const absOffset = Math.abs(timingOffset)
       const isCorrect = absOffset <= TIMING_TOLERANCE_MS * 2
 
+      console.log(`[DEBUG] matchNote: matched! offset=${timingOffset} threshold=${TIMING_TOLERANCE_MS * 2} result=${isCorrect ? "correct" : "wrong"}`)
       return {
         playedNote,
         expectedNote: bestMatch.note,
@@ -425,6 +451,7 @@ export class SessionDO implements DurableObject {
 
     if (closestByTime) {
       const timingOffset = playedNote.timestamp - closestByTime.note.startTime
+      console.log(`[DEBUG] matchNote: no pitch match, closest expected=${closestByTime.note.pitch}@${closestByTime.note.startTime} result=wrong`)
       return {
         playedNote,
         expectedNote: closestByTime.note,
@@ -433,6 +460,7 @@ export class SessionDO implements DurableObject {
       }
     }
 
+    console.log(`[DEBUG] matchNote: no match at all, result=extra`)
     return {
       playedNote,
       expectedNote: null,
