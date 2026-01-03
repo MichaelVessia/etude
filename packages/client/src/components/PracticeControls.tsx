@@ -1,21 +1,11 @@
-import { useCallback, useEffect } from "react"
+import { useEffect } from "react"
 import { useAudio } from "../hooks/index.js"
-import type { Hand } from "../hooks/useSession.js"
 import styles from "./PracticeControls.module.css"
 
 interface PracticeControlsProps {
   isActive: boolean
   isLoading: boolean
   isMidiConnected: boolean
-  tempo: number
-  onTempoChange: (tempo: number) => void
-  selectedHand: Hand
-  onHandChange: (hand: Hand) => void
-  measureStart: number
-  measureEnd: number
-  maxMeasure: number
-  onMeasureStartChange: (measure: number) => void
-  onMeasureEndChange: (measure: number) => void
   onStart: () => void
   onStop: () => void
   midiBase64: string | null
@@ -30,15 +20,6 @@ export function PracticeControls({
   isActive,
   isLoading,
   isMidiConnected,
-  tempo,
-  onTempoChange,
-  selectedHand,
-  onHandChange,
-  measureStart,
-  measureEnd,
-  maxMeasure,
-  onMeasureStartChange,
-  onMeasureEndChange,
   onStart,
   onStop,
   midiBase64,
@@ -52,13 +33,6 @@ export function PracticeControls({
       audio.loadMidi(midiBase64)
     }
   }, [midiBase64, audio])
-
-  const handleTempoChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      onTempoChange(Number(e.target.value))
-    },
-    [onTempoChange]
-  )
 
   const canStart = isMidiConnected && !isLoading && midiBase64
 
@@ -102,74 +76,6 @@ export function PracticeControls({
                 <rect x="6" y="6" width="12" height="12" rx="1" />
               </svg>
             </button>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className={styles.divider} />
-
-        {/* Center Section - Settings */}
-        <div className={styles.section}>
-          <div className={styles.settingsRow}>
-            {/* Tempo */}
-            <div className={styles.control}>
-              <label className={styles.controlLabel}>Tempo</label>
-              <div className={styles.sliderGroup}>
-                <input
-                  type="range"
-                  min="25"
-                  max="150"
-                  value={tempo}
-                  onChange={handleTempoChange}
-                  disabled={isActive}
-                  className={styles.slider}
-                />
-                <span className={styles.sliderValue}>{tempo}%</span>
-              </div>
-            </div>
-
-            {/* Hand Selection */}
-            <div className={styles.control}>
-              <label className={styles.controlLabel}>Hand</label>
-              <div className={styles.segmentedControl}>
-                {(["left", "both", "right"] as Hand[]).map((hand) => (
-                  <button
-                    key={hand}
-                    className={`${styles.segment} ${selectedHand === hand ? styles.segmentActive : ""}`}
-                    onClick={() => onHandChange(hand)}
-                    disabled={isActive}
-                  >
-                    {hand === "left" ? "L" : hand === "right" ? "R" : "Both"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Measures */}
-            <div className={styles.control}>
-              <label className={styles.controlLabel}>Measures</label>
-              <div className={styles.measureInputs}>
-                <input
-                  type="number"
-                  min={1}
-                  max={measureEnd}
-                  value={measureStart}
-                  onChange={(e) => onMeasureStartChange(Math.max(1, Math.min(measureEnd, Number(e.target.value))))}
-                  disabled={isActive}
-                  className={styles.measureInput}
-                />
-                <span className={styles.measureSeparator}>-</span>
-                <input
-                  type="number"
-                  min={measureStart}
-                  max={maxMeasure}
-                  value={measureEnd}
-                  onChange={(e) => onMeasureEndChange(Math.max(measureStart, Math.min(maxMeasure, Number(e.target.value))))}
-                  disabled={isActive}
-                  className={styles.measureInput}
-                />
-              </div>
-            </div>
           </div>
         </div>
 

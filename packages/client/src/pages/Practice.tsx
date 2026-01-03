@@ -12,7 +12,6 @@ import {
   usePiece,
   useExtraNotes,
   type UseMidiResult,
-  type Hand,
 } from "../hooks/index.js"
 import styles from "./Practice.module.css"
 
@@ -31,19 +30,6 @@ export function Practice({ midi }: PracticeProps) {
   const [midiBase64, setMidiBase64] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
   const [sheetMusicPage, setSheetMusicPage] = useState(1)
-
-  // Practice settings
-  const [tempo, setTempo] = useState(100)
-  const [selectedHand, setSelectedHand] = useState<Hand>("both")
-  const [measureStart, setMeasureStart] = useState(1)
-  const [measureEnd, setMeasureEnd] = useState(piece?.measures ?? 1)
-
-  // Update measureEnd when piece loads
-  useEffect(() => {
-    if (piece?.measures) {
-      setMeasureEnd(piece.measures)
-    }
-  }, [piece?.measures])
 
   // Session management
   const session = useSession()
@@ -101,12 +87,6 @@ export function Practice({ midi }: PracticeProps) {
     if (svgElement) {
       playheadRef.current.initialize(noteElements, svgElement)
       extraNotesRef.current.initializePitchMap(noteElements, svgElement)
-    }
-
-    // Update measure count from actual notes
-    if (noteElements.length > 0) {
-      const maxPage = Math.max(...noteElements.map(n => n.page ?? 1))
-      setMeasureEnd(maxPage * 4)
     }
   }, [])
 
@@ -188,12 +168,12 @@ export function Practice({ midi }: PracticeProps) {
 
     await sessionRef.current.startSession({
       pieceId: importResult.id,
-      measureStart,
-      measureEnd,
-      hand: selectedHand,
-      tempo,
+      measureStart: 1,
+      measureEnd: piece.measures ?? 999,
+      hand: "both",
+      tempo: 100,
     })
-  }, [piece, measureStart, measureEnd, selectedHand, tempo])
+  }, [piece])
 
   // End practice session
   const handleEndPractice = useCallback(async () => {
@@ -306,15 +286,6 @@ export function Practice({ midi }: PracticeProps) {
         isActive={session.isActive}
         isLoading={session.isLoading}
         isMidiConnected={midi.isConnected}
-        tempo={tempo}
-        onTempoChange={setTempo}
-        selectedHand={selectedHand}
-        onHandChange={setSelectedHand}
-        measureStart={measureStart}
-        measureEnd={measureEnd}
-        maxMeasure={measureEnd}
-        onMeasureStartChange={setMeasureStart}
-        onMeasureEndChange={setMeasureEnd}
         onStart={handleStartPractice}
         onStop={handleEndPractice}
         midiBase64={midiBase64}
