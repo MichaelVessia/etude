@@ -286,11 +286,11 @@ export class SessionDO implements DurableObject {
     })
 
     server.addEventListener("close", () => {
-      this.cleanup()
+      this.cleanupWebSocket()
     })
 
     server.addEventListener("error", () => {
-      this.cleanup()
+      this.cleanupWebSocket()
     })
 
     // @ts-expect-error Cloudflare Response with webSocket property
@@ -496,13 +496,20 @@ export class SessionDO implements DurableObject {
     }
   }
 
-  private cleanup(): void {
+  /** Clean up WebSocket resources but preserve session state for /ws/end */
+  private cleanupWebSocket(): void {
     if (this.pingInterval) {
       clearInterval(this.pingInterval)
       this.pingInterval = null
     }
     this.activeWebSocket = null
-    this.sessionState = null // Discard session on disconnect per spec
+    // Session state preserved - will be cleared by /ws/end or timeout
+  }
+
+  /** Full cleanup including session state */
+  private cleanup(): void {
+    this.cleanupWebSocket()
+    this.sessionState = null
   }
 }
 
