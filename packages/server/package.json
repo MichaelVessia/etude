@@ -9,14 +9,15 @@
     "start": "bun src/main.ts"
   },
   "dependencies": {
-    "@etude/shared": "workspace:*",
-    "effect": "*",
     "@effect/platform": "*",
     "@effect/platform-bun": "*",
     "@effect/rpc": "*",
     "@effect/sql": "*",
+    "@effect/sql-d1": "^0.47.0",
     "@effect/sql-sqlite-bun": "*",
+    "@etude/shared": "workspace:*",
     "drizzle-orm": "*",
+    "effect": "*",
     "fast-xml-parser": "*"
   },
   "devDependencies": {

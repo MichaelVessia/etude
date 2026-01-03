@@ -1,28 +1,20 @@
 import { Effect, Layer, pipe } from "effect"
 import {
   HttpRouter,
-  HttpServer,
   HttpServerResponse,
   HttpServerRequest,
   HttpApp,
 } from "@effect/platform"
-import { BunHttpServer } from "@effect/platform-bun"
 import { SessionServiceLive } from "../services/session.js"
 import { ComparisonServiceLive } from "../services/comparison.js"
 import { MusicXmlServiceLive } from "../services/musicxml.js"
 import { PieceRepoLive } from "../repos/piece-repo.js"
 import { AttemptRepoLive } from "../repos/attempt-repo.js"
-import { SqlLive } from "../sql.js"
 import { sessionRoutes } from "./routes/session.js"
 import { pieceRoutes } from "./routes/piece.js"
 
-const PORT = 3001
-
-// Build service layers bottom-up
-const RepoLayer = pipe(
-  Layer.mergeAll(PieceRepoLive, AttemptRepoLive),
-  Layer.provide(SqlLive)
-)
+// Build service layers bottom-up (requires SqlClient to be provided)
+export const RepoLayer = Layer.mergeAll(PieceRepoLive, AttemptRepoLive)
 
 const SessionLayer = pipe(
   SessionServiceLive,
@@ -30,7 +22,8 @@ const SessionLayer = pipe(
   Layer.provide(ComparisonServiceLive)
 )
 
-const ServiceLayer = Layer.mergeAll(SessionLayer, ComparisonServiceLive, MusicXmlServiceLive, RepoLayer)
+// ServiceLayer requires SqlClient to be provided externally
+export const ServiceLayer = Layer.mergeAll(SessionLayer, ComparisonServiceLive, MusicXmlServiceLive, RepoLayer)
 
 // Add CORS headers to all responses
 const addCorsHeaders = <E, R>(app: HttpApp.Default<E, R>): HttpApp.Default<E, R> =>
@@ -55,20 +48,11 @@ const addCorsHeaders = <E, R>(app: HttpApp.Default<E, R>): HttpApp.Default<E, R>
   }) as HttpApp.Default<E, R>
 
 // Build router with all routes
-const router = HttpRouter.empty.pipe(
+export const router = HttpRouter.empty.pipe(
   HttpRouter.get("/health", HttpServerResponse.text("ok")),
   HttpRouter.mount("/api/session", sessionRoutes),
   HttpRouter.mount("/api/piece", pieceRoutes)
 )
 
 // Apply CORS to router
-const routerWithCors = addCorsHeaders(router)
-
-// Layer that provides the HTTP server
-export const HttpLive = pipe(
-  routerWithCors,
-  HttpServer.serve(),
-  HttpServer.withLogAddress,
-  Layer.provide(BunHttpServer.layer({ port: PORT })),
-  Layer.provide(ServiceLayer)
-)
+export const routerWithCors = addCorsHeaders(router)

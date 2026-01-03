@@ -1,4 +1,4 @@
-import { Effect, Layer, Ref, Option } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { SqlError } from "@effect/sql"
 import {
   NoteEvent,
@@ -14,6 +14,7 @@ import { SessionError, PieceNotFound } from "@etude/shared"
 import { PieceRepo } from "../repos/piece-repo.js"
 import { AttemptRepo } from "../repos/attempt-repo.js"
 import { ComparisonService } from "./comparison.js"
+import { SessionStateStore, LocalSessionStateStoreLive } from "./session-state-store.js"
 import type { MatchResult } from "./comparison.js"
 
 export interface SessionState {
@@ -141,11 +142,12 @@ function adjustNoteTiming(
   )
 }
 
-export const SessionServiceLive = Layer.effect(
+// Core SessionService implementation that depends on SessionStateStore
+// Export for use with custom state stores (e.g., DO-based in workers)
+export const SessionServiceImpl = Layer.effect(
   SessionService,
   Effect.gen(function* () {
-    // Session state stored in a Ref
-    const sessionRef = yield* Ref.make<SessionState | null>(null)
+    const stateStore = yield* SessionStateStore
     const pieceRepo = yield* PieceRepo
     const attemptRepo = yield* AttemptRepo
     const comparisonService = yield* ComparisonService
@@ -160,7 +162,7 @@ export const SessionServiceLive = Layer.effect(
       ) =>
         Effect.gen(function* () {
           // Check if session already active
-          const current = yield* Ref.get(sessionRef)
+          const current = yield* stateStore.get()
           if (current !== null) {
             return yield* new SessionError({ reason: "AlreadyActive" })
           }
@@ -207,7 +209,7 @@ export const SessionServiceLive = Layer.effect(
             firstNoteOffset: null,
           }
 
-          yield* Ref.set(sessionRef, state)
+          yield* stateStore.set(state)
 
           return {
             sessionId,
@@ -223,7 +225,7 @@ export const SessionServiceLive = Layer.effect(
         on: boolean
       ) =>
         Effect.gen(function* () {
-          const state = yield* Ref.get(sessionRef)
+          const state = yield* stateStore.get()
           if (state === null) {
             return yield* new SessionError({ reason: "NotStarted" })
           }
@@ -247,9 +249,7 @@ export const SessionServiceLive = Layer.effect(
             // This means: when user plays first note, that becomes time 0
             firstNoteOffset = timestamp
             yield* Effect.logDebug(`First note played at ${timestamp}ms, setting offset to ${firstNoteOffset}`)
-            yield* Ref.update(sessionRef, (s) =>
-              s ? { ...s, firstNoteOffset } : null
-            )
+            yield* stateStore.set({ ...state, firstNoteOffset })
           }
 
           // Adjust timestamp by the offset so played notes align with expected
@@ -271,15 +271,15 @@ export const SessionServiceLive = Layer.effect(
             state.hand
           )
 
-          // Update state
-          yield* Ref.update(sessionRef, (s) => {
-            if (s === null) return null
-            return {
-              ...s,
-              playedNotes: [...s.playedNotes, playedNote],
-              matchResults: [...s.matchResults, result],
-            }
-          })
+          // Update state - re-fetch to get latest (in case of concurrent updates)
+          const currentState = yield* stateStore.get()
+          if (currentState !== null) {
+            yield* stateStore.set({
+              ...currentState,
+              playedNotes: [...currentState.playedNotes, playedNote],
+              matchResults: [...currentState.matchResults, result],
+            })
+          }
 
           // Look up original note time for UI mapping
           // Find the index of the matched note in expectedNotes, then get original time
@@ -303,7 +303,7 @@ export const SessionServiceLive = Layer.effect(
 
       endSession: () =>
         Effect.gen(function* () {
-          const state = yield* Ref.get(sessionRef)
+          const state = yield* stateStore.get()
           if (state === null) {
             return yield* new SessionError({ reason: "NotStarted" })
           }
@@ -333,7 +333,7 @@ export const SessionServiceLive = Layer.effect(
           })
 
           // Clear session state
-          yield* Ref.set(sessionRef, null)
+          yield* stateStore.clear()
 
           return {
             attemptId: attempt.id,
@@ -347,7 +347,12 @@ export const SessionServiceLive = Layer.effect(
           }
         }),
 
-      getState: () => Ref.get(sessionRef),
+      getState: () => stateStore.get(),
     }
   })
+)
+
+// Local development version with Ref-based state store
+export const SessionServiceLive = SessionServiceImpl.pipe(
+  Layer.provide(LocalSessionStateStoreLive)
 )
