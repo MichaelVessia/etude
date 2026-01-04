@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { ManagedRuntime } from "effect"
+import { Layer, ManagedRuntime } from "effect"
 import { SessionRpcClientLive } from "./SessionRpcClient.js"
+import { PieceRpcClientLive } from "./PieceRpcClient.js"
 import { makeSessionAtoms, type SessionAtoms } from "./sessionAtoms.js"
 
 // App layer with all services
-const AppLayer = SessionRpcClientLive
+const AppLayer = Layer.mergeAll(SessionRpcClientLive, PieceRpcClientLive)
 
 // Create the managed runtime
 export const AppRuntime = ManagedRuntime.make(AppLayer)

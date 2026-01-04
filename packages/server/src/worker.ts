@@ -9,7 +9,7 @@ import { ComparisonServiceLive } from "./services/comparison.js"
 import { MusicXmlServiceLive } from "./services/musicxml.js"
 import { PieceRepoLive } from "./repos/piece-repo.js"
 import { AttemptRepoLive } from "./repos/attempt-repo.js"
-import { createRpcHandler } from "./rpc/index.js"
+import { createRpcHandlers } from "./rpc/index.js"
 import type { SessionDONamespace } from "./session-do.js"
 import type { NoteEvent, Hand, Milliseconds } from "@etude/shared"
 
@@ -240,7 +240,7 @@ export default {
     }
 
     // RPC routes - type-safe RPC endpoints
-    if (url.pathname === "/rpc") {
+    if (url.pathname === "/rpc" || url.pathname === "/rpc/session" || url.pathname === "/rpc/piece") {
       try {
         const sessionId = "default-session"
         const doId = env.SESSION_DO.idFromName(sessionId)
@@ -249,8 +249,14 @@ export default {
         // D1 layer doesn't have config errors in practice when DB binding exists
         const SqlLive = makeD1Layer(env.DB) as Layer.Layer<import("@effect/sql").SqlClient.SqlClient>
 
-        const rpcHandler = createRpcHandler(sessionStateStore, SqlLive)
-        const response = await rpcHandler.handler(request)
+        const rpcHandlers = createRpcHandlers(sessionStateStore, SqlLive)
+
+        // Route to appropriate handler
+        const handler = url.pathname === "/rpc/piece"
+          ? rpcHandlers.piece
+          : rpcHandlers.session // /rpc and /rpc/session both go to session
+
+        const response = await handler(request)
         return addCorsHeaders(response)
       } catch (error) {
         console.error("RPC error:", error)

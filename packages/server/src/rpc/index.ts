@@ -1,24 +1,26 @@
 import { Effect, Layer, pipe, Runtime } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "@effect/platform"
 import { RpcServer, RpcSerialization } from "@effect/rpc"
-import { SessionRpcs } from "@etude/shared"
+import { SessionRpcs, PieceRpcs } from "@etude/shared"
 import { SessionRpcsLive } from "./session.js"
+import { PieceRpcsLive } from "./piece.js"
 import { SessionServiceImpl } from "../services/session.js"
 import { ComparisonServiceLive } from "../services/comparison.js"
+import { MusicXmlServiceLive } from "../services/musicxml.js"
 import { PieceRepoLive } from "../repos/piece-repo.js"
 import { AttemptRepoLive } from "../repos/attempt-repo.js"
 import { SessionStateStore } from "../services/session-state-store.js"
 import type { SqlClient } from "@effect/sql"
 
 /**
- * Creates an RPC request handler for session endpoints.
+ * Creates RPC request handlers for all endpoints.
  * Uses Effect runtime to process RPC requests.
  *
  * @param sessionStateStore - The session state store implementation
  * @param sqlLayer - Layer providing SqlClient
- * @returns Handler function that processes RPC requests
+ * @returns Handler functions that process RPC requests
  */
-export function createRpcHandler(
+export function createRpcHandlers(
   sessionStateStore: SessionStateStore["Type"],
   sqlLayer: Layer.Layer<SqlClient.SqlClient>
 ) {
@@ -32,42 +34,82 @@ export function createRpcHandler(
     Layer.provide(Layer.mergeAll(RepoLayer, ComparisonServiceLive, SessionStateStoreLive))
   )
 
-  // RPC handlers with all dependencies merged
-  const FullRpcLayer = pipe(
+  // Session RPC handlers layer
+  const SessionRpcLayer = pipe(
     SessionRpcsLive,
     Layer.provide(SessionLayer),
     Layer.provide(sqlLayer)
   )
 
-  // Combined layer with serialization
-  const AppLayer = Layer.mergeAll(FullRpcLayer, RpcSerialization.layerNdjson)
+  // Piece RPC handlers layer
+  const PieceRpcLayer = pipe(
+    PieceRpcsLive,
+    Layer.provide(RepoLayer),
+    Layer.provide(MusicXmlServiceLive),
+    Layer.provide(sqlLayer)
+  )
 
-  // Create handler that processes requests
-  return {
-    handler: async (request: Request): Promise<Response> => {
-      const effect = Effect.gen(function* () {
-        // Get the RPC app with all dependencies
-        const app = yield* RpcServer.toHttpApp(SessionRpcs)
+  // Session app layer
+  const SessionAppLayer = Layer.mergeAll(
+    SessionRpcLayer,
+    RpcSerialization.layerNdjson
+  )
 
-        // Create HttpServerRequest from the web Request
-        const httpRequest = HttpServerRequest.fromWeb(request)
+  // Piece app layer
+  const PieceAppLayer = Layer.mergeAll(
+    PieceRpcLayer,
+    RpcSerialization.layerNdjson
+  )
 
-        // Run the RPC app with the request
-        const response = yield* app.pipe(
-          Effect.provideService(HttpServerRequest.HttpServerRequest, httpRequest)
-        )
-
-        // Convert to web Response
-        return HttpServerResponse.toWeb(response)
-      }).pipe(
-        Effect.provide(AppLayer),
-        Effect.scoped
+  // Session handler
+  const sessionHandler = async (request: Request): Promise<Response> => {
+    const effect = Effect.gen(function* () {
+      const app = yield* RpcServer.toHttpApp(SessionRpcs)
+      const httpRequest = HttpServerRequest.fromWeb(request)
+      const response = yield* app.pipe(
+        Effect.provideService(HttpServerRequest.HttpServerRequest, httpRequest)
       )
+      return HttpServerResponse.toWeb(response)
+    }).pipe(
+      Effect.provide(SessionAppLayer),
+      Effect.scoped
+    )
 
-      return Runtime.runPromise(Runtime.defaultRuntime)(effect)
-    },
+    return Runtime.runPromise(Runtime.defaultRuntime)(effect)
+  }
+
+  // Piece handler
+  const pieceHandler = async (request: Request): Promise<Response> => {
+    const effect = Effect.gen(function* () {
+      const app = yield* RpcServer.toHttpApp(PieceRpcs)
+      const httpRequest = HttpServerRequest.fromWeb(request)
+      const response = yield* app.pipe(
+        Effect.provideService(HttpServerRequest.HttpServerRequest, httpRequest)
+      )
+      return HttpServerResponse.toWeb(response)
+    }).pipe(
+      Effect.provide(PieceAppLayer),
+      Effect.scoped
+    )
+
+    return Runtime.runPromise(Runtime.defaultRuntime)(effect)
+  }
+
+  return {
+    session: sessionHandler,
+    piece: pieceHandler,
   }
 }
 
+// Legacy export for backwards compatibility
+export function createRpcHandler(
+  sessionStateStore: SessionStateStore["Type"],
+  sqlLayer: Layer.Layer<SqlClient.SqlClient>
+) {
+  const handlers = createRpcHandlers(sessionStateStore, sqlLayer)
+  return { handler: handlers.session }
+}
+
 export { SessionRpcsLive } from "./session.js"
-export { SessionRpcs } from "@etude/shared"
+export { PieceRpcsLive } from "./piece.js"
+export { SessionRpcs, PieceRpcs } from "@etude/shared"
