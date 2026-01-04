@@ -106,7 +106,7 @@ graph TB
 **Infrastructure:**
 - **Worker**: Single Cloudflare Worker serving both static SPA and API routes
 - **D1 Database**: SQLite-compatible database for pieces and attempts
-- **Durable Objects**: Persistent session state (replaces in-memory Ref from local dev)
+- **Durable Objects**: Persistent session state
 - **Custom Domain**: etude.vessia.net
 
 ### Data Flow
@@ -176,7 +176,7 @@ etude/
 | Runtime | Bun (local), Cloudflare Workers (prod) |
 | Backend Framework | Effect |
 | Database | SQLite (local), D1 (prod) |
-| Session State | Ref (local), Durable Objects (prod) |
+| Session State | Durable Objects (miniflare locally) |
 | Frontend | React + Vite |
 | Sheet Music | Verovio (WASM) |
 | Audio | Tone.js |

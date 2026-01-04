@@ -13,6 +13,8 @@ export interface VerovioOptions {
   svgViewBox?: boolean
   adjustPageHeight?: boolean
   adjustPageWidth?: boolean
+  spacingBraceGroup?: number
+  lyricTopMinMargin?: number
 }
 
 const defaultOptions: VerovioOptions = {

@@ -52,6 +52,8 @@ export function SheetMusicView({
     getNoteElements
   } = useVerovio({
     scale: 50, // Larger scale for full-screen view
+    spacingBraceGroup: 18, // More space between staves for lyrics
+    lyricTopMinMargin: 3.0, // Push lyrics down from treble staff
   })
 
   useEffect(() => {
