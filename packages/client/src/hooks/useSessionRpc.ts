@@ -10,7 +10,8 @@ import {
 import { useNoteStream, type SessionScore, type NoteResult } from "./useNoteStream.js"
 import type { Hand } from "@etude/shared"
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8787"
+// Use relative URLs - works in both dev (vite proxy) and prod (same origin)
+const API_BASE = ""
 
 export interface SessionStartParams {
   pieceId: string

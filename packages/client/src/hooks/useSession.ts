@@ -1,9 +1,9 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import { useNoteStream, type SessionScore } from "./useNoteStream.js"
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8787"
-const SESSION_API = `${API_BASE}/api/session`
-const PIECE_API = `${API_BASE}/api/piece`
+// Use relative URLs - works in both dev (vite proxy) and prod (same origin)
+const SESSION_API = "/api/session"
+const PIECE_API = "/api/piece"
 
 export type Hand = "left" | "right" | "both"
 
