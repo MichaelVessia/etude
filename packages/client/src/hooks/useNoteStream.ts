@@ -51,6 +51,7 @@ export function useNoteStream(
   const wsRef = useRef<WebSocket | null>(null)
   const retryCount = useRef(0)
   const retryTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const connectingRef = useRef(false)
 
   // Use refs for callbacks to avoid reconnection loops when callbacks change
   const onErrorRef = useRef(onError)
@@ -73,12 +74,17 @@ export function useNoteStream(
       wsRef.current.close()
       wsRef.current = null
     }
+    connectingRef.current = false
     setConnected(false)
     setReady(false)
   }, [])
 
   const connect = useCallback(() => {
     if (!wsUrl) return
+
+    // Prevent double connections (React StrictMode runs effects twice)
+    if (connectingRef.current) return
+    connectingRef.current = true
 
     cleanup()
     setError(null)
@@ -87,11 +93,13 @@ export function useNoteStream(
     wsRef.current = ws
 
     ws.onopen = () => {
+      connectingRef.current = false
       setConnected(true)
       retryCount.current = 0
     }
 
     ws.onclose = (event) => {
+      connectingRef.current = false
       setConnected(false)
       setReady(false)
 
@@ -112,6 +120,7 @@ export function useNoteStream(
 
     ws.onerror = () => {
       // Error event doesn't provide useful info - onclose will handle retry
+      connectingRef.current = false
     }
 
     ws.onmessage = (event) => {
