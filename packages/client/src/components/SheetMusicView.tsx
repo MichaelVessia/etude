@@ -5,10 +5,17 @@ import { ExtraNoteIndicators } from "./PlayedNoteIndicators.js"
 import type { PlayheadPosition } from "../hooks/usePlayhead.js"
 import styles from "./SheetMusicView.module.css"
 
+export interface PageInfo {
+  currentPage: number
+  pageCount: number
+  setPage: (page: number) => void
+}
+
 interface SheetMusicViewProps {
   musicXml: string | null
   onMidiReady?: (midiBase64: string | null) => void
   onNoteElementsReady?: (noteElements: NoteElementInfo[], svgElement: SVGElement | null) => void
+  onPageInfoReady?: (pageInfo: PageInfo) => void
   playheadPosition?: PlayheadPosition | null
   showPlayhead?: boolean
   page?: number | undefined
@@ -20,6 +27,7 @@ export function SheetMusicView({
   musicXml,
   onMidiReady,
   onNoteElementsReady,
+  onPageInfoReady,
   playheadPosition,
   showPlayhead = false,
   page,
@@ -62,6 +70,13 @@ export function SheetMusicView({
       setPage(page)
     }
   }, [page, currentPage, pageCount, setPage])
+
+  // Expose page info to parent for keyboard navigation
+  useEffect(() => {
+    if (onPageInfoReady && pageCount > 0) {
+      onPageInfoReady({ currentPage, pageCount, setPage })
+    }
+  }, [onPageInfoReady, currentPage, pageCount, setPage])
 
   // Notify parent when MIDI is ready
   useEffect(() => {

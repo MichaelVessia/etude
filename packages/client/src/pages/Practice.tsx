@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef, useEffect, useLayoutEffect } from "react"
 import { useLocation, useParams } from "wouter"
-import { SheetMusicView } from "../components/SheetMusicView.js"
+import { SheetMusicView, type PageInfo } from "../components/SheetMusicView.js"
 import { PracticeControls } from "../components/PracticeControls.js"
 import { ResultsOverlay } from "../components/ResultsOverlay.js"
 import { MidiSimulator } from "../components/dev/MidiSimulator.js"
@@ -30,6 +30,7 @@ export function Practice({ midi }: PracticeProps) {
   const [midiBase64, setMidiBase64] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
   const [sheetMusicPage, setSheetMusicPage] = useState(1)
+  const [pageInfo, setPageInfo] = useState<PageInfo | null>(null)
 
   // Session management
   const session = useSession()
@@ -199,23 +200,61 @@ export function Practice({ midi }: PracticeProps) {
     handleStartPractice()
   }, [handleStartPractice])
 
-  // Keyboard shortcut: R to restart practice
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'r' || e.key === 'R') {
-        // Don't trigger if typing in an input
-        if (e.target instanceof HTMLInputElement) return
-        e.preventDefault()
-        if (session.isActive) {
-          session.endSession().then(() => handleStartPractice())
-        } else {
-          handleStartPractice()
-        }
+      // Don't trigger if typing in an input
+      if (e.target instanceof HTMLInputElement) return
+
+      switch (e.key) {
+        case ' ': // Space: toggle start/stop practice
+          e.preventDefault()
+          if (session.isActive) {
+            session.endSession()
+          } else if (!session.isLoading && piece?.xml && midi.isConnected) {
+            handleStartPractice()
+          }
+          break
+
+        case 'Escape': // Escape: dismiss results or go back
+          e.preventDefault()
+          if (showResults) {
+            setShowResults(false)
+          } else if (session.isActive) {
+            session.endSession()
+          } else {
+            navigate("/")
+          }
+          break
+
+        case 'r':
+        case 'R': // R: restart practice
+          e.preventDefault()
+          if (session.isActive) {
+            session.endSession().then(() => handleStartPractice())
+          } else {
+            handleStartPractice()
+          }
+          break
+
+        case 'ArrowLeft': // Left arrow: previous page (when not in session)
+          if (!session.isActive && pageInfo && pageInfo.currentPage > 1) {
+            e.preventDefault()
+            pageInfo.setPage(pageInfo.currentPage - 1)
+          }
+          break
+
+        case 'ArrowRight': // Right arrow: next page (when not in session)
+          if (!session.isActive && pageInfo && pageInfo.currentPage < pageInfo.pageCount) {
+            e.preventDefault()
+            pageInfo.setPage(pageInfo.currentPage + 1)
+          }
+          break
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [session, handleStartPractice])
+  }, [session, handleStartPractice, showResults, navigate, piece?.xml, midi.isConnected, pageInfo])
 
   if (error) {
     return (
@@ -270,6 +309,7 @@ export function Practice({ midi }: PracticeProps) {
           musicXml={piece.xml}
           onMidiReady={setMidiBase64}
           onNoteElementsReady={handleNoteElementsReady}
+          onPageInfoReady={setPageInfo}
           playheadPosition={playhead.position}
           showPlayhead={session.isActive && playhead.isRunning}
           page={session.isActive ? sheetMusicPage : undefined}
