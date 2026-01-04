@@ -11,7 +11,18 @@ import {
   Accuracy,
   AttemptId,
 } from "./domain.js"
-import { PieceNotFound, SessionError } from "./errors.js"
+import { ParseError, PieceNotFound, SessionError } from "./errors.js"
+
+// Import piece result
+export class ImportPieceResult extends Schema.Class<ImportPieceResult>(
+  "ImportPieceResult"
+)({
+  id: PieceId,
+  name: Schema.String,
+  totalMeasures: MeasureNumber,
+  noteCount: Schema.Number,
+  alreadyExists: Schema.Boolean,
+}) {}
 
 // Session started acknowledgment
 export class SessionStarted extends Schema.Class<SessionStarted>(
@@ -62,6 +73,15 @@ export class PieceRpcs extends RpcGroup.make(
     payload: Schema.Struct({ pieceId: PieceId }),
     success: Schema.Array(NoteEvent),
     error: PieceNotFound,
+  }),
+  Rpc.make("importPiece", {
+    payload: Schema.Struct({
+      id: Schema.String,
+      xml: Schema.String,
+      filePath: Schema.String,
+    }),
+    success: ImportPieceResult,
+    error: ParseError,
   })
 ) {}
 
