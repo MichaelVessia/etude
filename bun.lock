@@ -21,6 +21,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@effect/platform": "*",
+        "@effect/rpc": "*",
         "@etude/shared": "workspace:*",
         "@tonejs/midi": "^2.0.28",
         "effect": "*",

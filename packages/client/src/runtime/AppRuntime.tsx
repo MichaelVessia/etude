@@ -1,14 +1,30 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { ManagedRuntime, Layer } from "effect"
+import { ManagedRuntime } from "effect"
+import { SessionRpcClientLive } from "./SessionRpcClient.js"
+import { makeSessionAtoms, type SessionAtoms } from "./sessionAtoms.js"
 
-// Empty layer for now - add services as needed
-const AppLayer = Layer.empty
+// App layer with all services
+const AppLayer = SessionRpcClientLive
 
 // Create the managed runtime
 export const AppRuntime = ManagedRuntime.make(AppLayer)
 
 // Extract the context type from the runtime
 export type AppRuntimeContext = ManagedRuntime.ManagedRuntime.Context<typeof AppRuntime>
+
+// Session atoms - created once at app startup
+let sessionAtomsPromise: Promise<SessionAtoms> | null = null
+
+/**
+ * Get or create session atoms.
+ * Atoms are created lazily on first access.
+ */
+export function getSessionAtoms(): Promise<SessionAtoms> {
+  if (sessionAtomsPromise === null) {
+    sessionAtomsPromise = AppRuntime.runPromise(makeSessionAtoms)
+  }
+  return sessionAtomsPromise
+}
 
 // React context for the runtime
 const RuntimeContext = createContext<typeof AppRuntime | null>(null)

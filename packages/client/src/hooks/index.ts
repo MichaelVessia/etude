@@ -31,3 +31,6 @@ export { useExtraNotes } from "./usePlayedNotes.js"
 export type { ExtraNoteIndicator, StaffBounds, UseExtraNotesResult } from "./usePlayedNotes.js"
 
 export { useImportPiece } from "./useImportPiece.js"
+
+export { useSessionRpc } from "./useSessionRpc.js"
+export type { UseSessionRpcResult, SessionStartParams as SessionRpcStartParams } from "./useSessionRpc.js"

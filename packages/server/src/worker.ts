@@ -9,6 +9,7 @@ import { ComparisonServiceLive } from "./services/comparison.js"
 import { MusicXmlServiceLive } from "./services/musicxml.js"
 import { PieceRepoLive } from "./repos/piece-repo.js"
 import { AttemptRepoLive } from "./repos/attempt-repo.js"
+import { createRpcHandler } from "./rpc/index.js"
 import type { SessionDONamespace } from "./session-do.js"
 import type { NoteEvent, Hand, Milliseconds } from "@etude/shared"
 
@@ -235,6 +236,31 @@ export default {
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error"
         return addCorsHeaders(Response.json({ error: message }, { status: 500 }))
+      }
+    }
+
+    // RPC routes - type-safe RPC endpoints
+    if (url.pathname === "/rpc") {
+      try {
+        const sessionId = "default-session"
+        const doId = env.SESSION_DO.idFromName(sessionId)
+        const doStub = env.SESSION_DO.get(doId)
+        const sessionStateStore = makeDOSessionStateStore(doStub)
+        // D1 layer doesn't have config errors in practice when DB binding exists
+        const SqlLive = makeD1Layer(env.DB) as Layer.Layer<import("@effect/sql").SqlClient.SqlClient>
+
+        const rpcHandler = createRpcHandler(sessionStateStore, SqlLive)
+        const response = await rpcHandler.handler(request)
+        return addCorsHeaders(response)
+      } catch (error) {
+        console.error("RPC error:", error)
+        const message = error instanceof Error ? error.message : "Unknown error"
+        return addCorsHeaders(
+          new Response(JSON.stringify({ error: message }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          })
+        )
       }
     }
 
