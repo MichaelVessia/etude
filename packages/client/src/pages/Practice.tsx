@@ -4,6 +4,7 @@ import { SheetMusicView, type PageInfo } from "../components/SheetMusicView.js"
 import { PracticeControls } from "../components/PracticeControls.js"
 import { ResultsOverlay } from "../components/ResultsOverlay.js"
 import { MidiSimulator } from "../components/dev/MidiSimulator.js"
+import { MidiDeviceSelector } from "../components/MidiDeviceSelector.js"
 import {
   type NoteElementInfo,
   useSession,
@@ -17,9 +18,10 @@ import styles from "./Practice.module.css"
 
 interface PracticeProps {
   midi: UseMidiResult
+  onSelectDevice: (id: string | null) => void
 }
 
-export function Practice({ midi }: PracticeProps) {
+export function Practice({ midi, onSelectDevice }: PracticeProps) {
   const [, navigate] = useLocation()
   const params = useParams<{ id: string }>()
 
@@ -296,10 +298,7 @@ export function Practice({ midi }: PracticeProps) {
         </div>
 
         <div className={styles.headerRight}>
-          <div className={`${styles.midiStatus} ${midi.isConnected ? styles.connected : ""}`}>
-            <span className={styles.midiDot} />
-            <span>{midi.isConnected ? "MIDI Ready" : "No MIDI"}</span>
-          </div>
+          <MidiDeviceSelector midi={midi} onSelectDevice={onSelectDevice} />
         </div>
       </header>
 

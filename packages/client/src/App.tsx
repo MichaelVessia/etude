@@ -34,7 +34,7 @@ export function App() {
         <Library midi={midi} onSelectDevice={handleSelectDevice} />
       </Route>
       <Route path="/practice/:id">
-        <Practice midi={midi} />
+        <Practice midi={midi} onSelectDevice={handleSelectDevice} />
       </Route>
     </Switch>
   )

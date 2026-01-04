@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react"
 import { useLocation } from "wouter"
-import { MidiStatusBadge } from "../components/MidiStatusBadge.js"
+import { MidiDeviceSelector } from "../components/MidiDeviceSelector.js"
 import type { UseMidiResult } from "../hooks/index.js"
 import styles from "./Library.module.css"
 
@@ -49,7 +49,6 @@ export function Library({ midi, onSelectDevice }: LibraryProps) {
   const [, navigate] = useLocation()
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [showDeviceSelector, setShowDeviceSelector] = useState(false)
 
   const loadPiece = useCallback(async (piece: PieceInfo) => {
     setLoading(piece.id)
@@ -97,42 +96,7 @@ export function Library({ midi, onSelectDevice }: LibraryProps) {
           </div>
 
           <div className={styles.headerActions}>
-            <div className={styles.deviceSelector}>
-              <MidiStatusBadge
-                isConnected={midi.isConnected}
-                deviceName={midi.selectedDevice?.name}
-                onClick={() => setShowDeviceSelector(!showDeviceSelector)}
-              />
-
-              {showDeviceSelector && (
-                <div className={styles.deviceDropdown}>
-                  <div className={styles.deviceDropdownHeader}>Select MIDI Device</div>
-                  {midi.devices.length === 0 ? (
-                    <div className={styles.deviceEmpty}>
-                      No MIDI devices found. Connect a keyboard and refresh.
-                    </div>
-                  ) : (
-                    <div className={styles.deviceList}>
-                      {midi.devices.map((device) => (
-                        <button
-                          key={device.id}
-                          className={`${styles.deviceItem} ${midi.selectedDevice?.id === device.id ? styles.deviceItemActive : ""}`}
-                          onClick={() => {
-                            onSelectDevice(device.id)
-                            setShowDeviceSelector(false)
-                          }}
-                        >
-                          <span className={styles.deviceName}>{device.name}</span>
-                          {device.manufacturer && (
-                            <span className={styles.deviceMfg}>{device.manufacturer}</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <MidiDeviceSelector midi={midi} onSelectDevice={onSelectDevice} />
           </div>
         </div>
       </header>
