@@ -1,7 +1,23 @@
 import type { DurableObjectState, WebSocket as CFWebSocket } from "@cloudflare/workers-types"
-import type { NoteEvent, PlayedNote, PieceId, Hand, WsClientMessage, WsServerMessage } from "@etude/shared"
-import { Milliseconds, MidiPitch, Velocity } from "@etude/shared"
-import { Option } from "effect"
+import type { NoteEvent, PlayedNote, PieceId, Hand } from "@etude/shared"
+import {
+  Milliseconds,
+  MidiPitch,
+  Velocity,
+  WsClientMessage,
+  WsReadyMessage,
+  WsResultMessage,
+  WsPingMessage,
+  WsSessionEndMessage,
+} from "@etude/shared"
+import { Option, Schema } from "effect"
+
+// Schema decoders/encoders for type-safe WebSocket messages
+const decodeClientMessage = Schema.decodeUnknownSync(WsClientMessage)
+const encodeReadyMessage = Schema.encodeSync(WsReadyMessage)
+const encodeResultMessage = Schema.encodeSync(WsResultMessage)
+const encodePingMessage = Schema.encodeSync(WsPingMessage)
+const encodeSessionEndMessage = Schema.encodeSync(WsSessionEndMessage)
 
 // WebSocketPair is a global in Cloudflare Workers runtime
 declare const WebSocketPair: {
@@ -158,12 +174,14 @@ export class SessionDO implements DurableObject {
 
         const result = this.calculateFinalResult()
 
-        // Send sessionEnd message before closing
+        // Send sessionEnd message before closing with Schema encoding
         if (this.activeWebSocket) {
-          const endMsg: WsServerMessage = {
-            type: "sessionEnd",
-            score: result.score,
-          }
+          const endMsg = encodeSessionEndMessage(
+            new WsSessionEndMessage({
+              type: "sessionEnd",
+              score: result.score,
+            })
+          )
           this.activeWebSocket.send(JSON.stringify(endMsg))
           this.activeWebSocket.close(1000, "Session ended")
         }
@@ -245,42 +263,48 @@ export class SessionDO implements DurableObject {
     server.accept()
     this.activeWebSocket = server
 
-    // Send ready message
-    const readyMsg: WsServerMessage = {
-      type: "ready",
-      sessionId: this.sessionState.sessionId,
-    }
+    // Send ready message with Schema encoding
+    const readyMsg = encodeReadyMessage(
+      new WsReadyMessage({
+        type: "ready",
+        sessionId: this.sessionState.sessionId,
+      })
+    )
     server.send(JSON.stringify(readyMsg))
 
     // Start server-initiated heartbeat (every 30s)
     this.pingInterval = setInterval(() => {
       if (this.activeWebSocket?.readyState === 1) {
-        // WebSocket.OPEN
-        const pingMsg: WsServerMessage = { type: "ping" }
+        // WebSocket.OPEN - Schema-encoded ping
+        const pingMsg = encodePingMessage(new WsPingMessage({ type: "ping" }))
         this.activeWebSocket.send(JSON.stringify(pingMsg))
       }
     }, 30000)
 
-    // Handle messages
+    // Handle messages with Schema validation
     server.addEventListener("message", (event) => {
       try {
-        const data = JSON.parse(event.data as string) as WsClientMessage
+        const raw = JSON.parse(event.data as string) as unknown
+        const data = decodeClientMessage(raw)
 
         if (data.type === "note") {
           const result = this.processNote(data)
-          const resultMsg: WsServerMessage = {
-            type: "result",
-            pitch: result.pitch,
-            result: result.result,
-            timingOffset: result.timingOffset,
-            expectedNoteTime: result.expectedNoteTime,
-          }
+          // Schema-encoded result message
+          const resultMsg = encodeResultMessage(
+            new WsResultMessage({
+              type: "result",
+              pitch: result.pitch,
+              result: result.result,
+              timingOffset: result.timingOffset,
+              expectedNoteTime: result.expectedNoteTime,
+            })
+          )
           server.send(JSON.stringify(resultMsg))
         } else if (data.type === "pong") {
           // Heartbeat response - connection is alive
         }
       } catch (e) {
-        console.error("Failed to process WebSocket message:", e)
+        console.error("Failed to process/validate WebSocket message:", e)
         // Log + ignore per spec
       }
     })

@@ -1,5 +1,15 @@
 import { useState, useCallback, useRef, useEffect } from "react"
-import type { WsServerMessage, WsClientMessage } from "@etude/shared"
+import { Schema } from "effect"
+import {
+  WsServerMessage,
+  WsNoteMessage,
+  WsPongMessage,
+} from "@etude/shared"
+
+// Schema decoders/encoders for type-safe WebSocket messages
+const decodeServerMessage = Schema.decodeUnknownSync(WsServerMessage)
+const encodeNoteMessage = Schema.encodeSync(WsNoteMessage)
+const encodePongMessage = Schema.encodeSync(WsPongMessage)
 
 export interface NoteResult {
   pitch: number
@@ -106,7 +116,8 @@ export function useNoteStream(
 
     ws.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data) as WsServerMessage
+        const raw = JSON.parse(event.data as string) as unknown
+        const data = decodeServerMessage(raw)
 
         switch (data.type) {
           case "ready":
@@ -127,9 +138,9 @@ export function useNoteStream(
             break
 
           case "ping":
-            // Respond to server ping
+            // Respond to server ping with Schema-encoded message
             if (ws.readyState === WebSocket.OPEN) {
-              const pong: WsClientMessage = { type: "pong" }
+              const pong = encodePongMessage(new WsPongMessage({ type: "pong" }))
               ws.send(JSON.stringify(pong))
             }
             break
@@ -138,12 +149,9 @@ export function useNoteStream(
             // Recoverable error from server
             console.error("Server error:", data.message)
             break
-
-          default:
-            console.warn("Unknown message type:", data)
         }
       } catch (e) {
-        console.error("Failed to parse WebSocket message:", e)
+        console.error("Failed to parse/validate WebSocket message:", e)
         // Log + ignore per spec
       }
     }
@@ -161,7 +169,10 @@ export function useNoteStream(
   const sendNote = useCallback(
     (pitch: number, velocity: number, timestamp: number, on: boolean) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
-        const msg: WsClientMessage = { type: "note", pitch, velocity, timestamp, on }
+        // Schema-encoded note message for type safety
+        const msg = encodeNoteMessage(
+          new WsNoteMessage({ type: "note", pitch, velocity, timestamp, on })
+        )
         wsRef.current.send(JSON.stringify(msg))
       }
     },
