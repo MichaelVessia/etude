@@ -233,13 +233,12 @@ describe.skipIf(skipMidiTests)("useMidi", () => {
         result.current.selectDevice("device-1")
       })
 
-      // Wait for stream to be active (async fiber initialization)
+      // Wait for BOTH stream to be active AND listener to be registered
+      // Combining in one waitFor ensures Effect's fiber gets scheduling time
       await waitFor(() => {
         expect(result.current.isConnected).toBe(true)
+        expect(input.hasMessageListener()).toBe(true)
       })
-
-      // Wait for the effect-web-midi stream to actually register its listener
-      await input.waitForMessageListener()
 
       act(() => {
         simulateMIDINoteOn(input, 60, 100, 1000)
@@ -311,13 +310,12 @@ describe.skipIf(skipMidiTests)("useMidi", () => {
         result.current.selectDevice("device-1")
       })
 
-      // Wait for stream to be active
+      // Wait for BOTH stream to be active AND listener to be registered
+      // Combining in one waitFor ensures Effect's fiber gets scheduling time
       await waitFor(() => {
         expect(result.current.isConnected).toBe(true)
+        expect(input.hasMessageListener()).toBe(true)
       })
-
-      // Wait for the effect-web-midi stream to actually register its listener
-      await input.waitForMessageListener()
 
       act(() => {
         simulateMIDINoteOnZeroVelocity(input, 60, 2000)
@@ -349,13 +347,12 @@ describe.skipIf(skipMidiTests)("useMidi", () => {
         result.current.selectDevice("device-1")
       })
 
-      // Wait for stream to be active
+      // Wait for BOTH stream to be active AND listener to be registered
+      // Combining in one waitFor ensures Effect's fiber gets scheduling time
       await waitFor(() => {
         expect(result.current.isConnected).toBe(true)
+        expect(input.hasMessageListener()).toBe(true)
       })
-
-      // Wait for the effect-web-midi stream to actually register its listener
-      await input.waitForMessageListener()
 
       expect(result.current.lastNote).toBeNull()
 

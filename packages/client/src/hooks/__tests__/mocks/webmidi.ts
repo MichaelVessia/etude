@@ -98,6 +98,14 @@ class GlobalMockMIDIInput extends GlobalMockMIDIPort {
   }
 
   /**
+   * Synchronously checks if a midimessage listener is registered.
+   * Use this in waitFor() to check listener readiness alongside other conditions.
+   */
+  hasMessageListener(): boolean {
+    return this._messageListeners.length > 0 || this._onmidimessage !== null
+  }
+
+  /**
    * Returns a promise that resolves when a midimessage listener is added
    * (via addEventListener or onmidimessage setter).
    * Use this in tests to wait for the stream to be ready.
