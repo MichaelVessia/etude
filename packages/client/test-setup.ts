@@ -20,8 +20,6 @@ class GlobalMockMIDIPort extends EventTarget {
   readonly state: MIDIPortDeviceState = "connected"
   readonly connection: MIDIPortConnectionState = "closed"
   readonly type: MIDIPortType = "input"
-  onstatechange: ((this: MIDIPort, ev: MIDIConnectionEvent) => unknown) | null =
-    null
 
   open(): Promise<MIDIPort> {
     return Promise.resolve(this as unknown as MIDIPort)
@@ -34,24 +32,8 @@ class GlobalMockMIDIPort extends EventTarget {
 
 class GlobalMockMIDIInput extends GlobalMockMIDIPort {
   override readonly type: MIDIPortType = "input"
-  private _onmidimessage:
-    | ((this: MIDIInput, ev: MIDIMessageEvent) => unknown)
-    | null = null
   private _messageListenerCount = 0
   private _listenerAddedResolvers: Array<() => void> = []
-
-  get onmidimessage(): ((this: MIDIInput, ev: MIDIMessageEvent) => unknown) | null {
-    return this._onmidimessage
-  }
-
-  set onmidimessage(
-    value: ((this: MIDIInput, ev: MIDIMessageEvent) => unknown) | null
-  ) {
-    this._onmidimessage = value
-    if (value !== null) {
-      this._notifyListenerAdded()
-    }
-  }
 
   private _notifyListenerAdded(): void {
     for (const resolve of this._listenerAddedResolvers) {
@@ -84,7 +66,7 @@ class GlobalMockMIDIInput extends GlobalMockMIDIPort {
   }
 
   hasMessageListener(): boolean {
-    return this._messageListenerCount > 0 || this._onmidimessage !== null
+    return this._messageListenerCount > 0
   }
 
   waitForMessageListener(): Promise<void> {
@@ -101,7 +83,6 @@ class GlobalMockMIDIInput extends GlobalMockMIDIPort {
     Object.defineProperty(midiEvent, "data", { value: event.data })
     Object.defineProperty(midiEvent, "timeStamp", { value: event.timeStamp })
     this.dispatchEvent(midiEvent)
-    this.onmidimessage?.call(this as unknown as MIDIInput, midiEvent as MIDIMessageEvent)
   }
 }
 
@@ -113,15 +94,11 @@ class GlobalMockMIDIAccess extends EventTarget {
   inputs: Map<string, GlobalMockMIDIInput> = new Map()
   readonly outputs: MIDIOutputMap = new Map()
   readonly sysexEnabled: boolean = false
-  onstatechange:
-    | ((this: MIDIAccess, ev: MIDIConnectionEvent) => unknown)
-    | null = null
 
   dispatchStateChange(port: GlobalMockMIDIInput | null): void {
     const event = new Event("statechange")
     Object.defineProperty(event, "port", { value: port as unknown as MIDIPort })
     this.dispatchEvent(event)
-    this.onstatechange?.call(this as unknown as MIDIAccess, event as MIDIConnectionEvent)
   }
 }
 

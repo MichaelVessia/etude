@@ -4,12 +4,16 @@
  * Uses the global MIDI classes defined in test-setup.ts which are set up
  * before effect-web-midi loads. This ensures instanceof checks work correctly.
  *
- * Used from useMidi.ts:
+ * effect-web-midi uses Stream.fromEventListener (addEventListener) internally,
+ * not onmidimessage/onstatechange properties. Our mocks extend EventTarget
+ * to support this pattern.
+ *
+ * Used from useMidi.ts via effect-web-midi:
  * - navigator.requestMIDIAccess() -> Promise<MIDIAccess>
  * - MIDIAccess.inputs (Map of MIDIInput)
- * - MIDIAccess.onstatechange
  * - MIDIInput.id, .name, .manufacturer
- * - MIDIInput.onmidimessage
+ * - MIDIInput.addEventListener("midimessage", ...)
+ * - MIDIAccess.addEventListener("statechange", ...)
  * - MIDIMessageEvent.data (Uint8Array: [status, note, velocity])
  * - MIDIMessageEvent.timeStamp
  */
