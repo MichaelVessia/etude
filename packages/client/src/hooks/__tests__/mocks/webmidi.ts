@@ -19,12 +19,16 @@ const NOTE_OFF = 0x80
 
 // ===========================================================================
 // Global Web MIDI API class mocks for effect-web-midi's instanceof checks
+// These classes are used both as global prototypes and as bases for test mocks
 // ===========================================================================
 
+// Store event listeners for state change stream
+type StateChangeListener = (event: MIDIConnectionEvent) => void
+
 class GlobalMockMIDIPort {
-  readonly id: string = ""
-  readonly name: string | null = null
-  readonly manufacturer: string | null = null
+  id = ""
+  name: string | null = null
+  manufacturer: string | null = null
   readonly version: string | null = null
   readonly state: MIDIPortDeviceState = "connected"
   readonly connection: MIDIPortConnectionState = "closed"
@@ -40,8 +44,14 @@ class GlobalMockMIDIPort {
     return Promise.resolve(this as unknown as MIDIPort)
   }
 
-  addEventListener(): void {}
-  removeEventListener(): void {}
+  addEventListener(
+    _type: string,
+    _listener: EventListenerOrEventListenerObject
+  ): void {}
+  removeEventListener(
+    _type: string,
+    _listener: EventListenerOrEventListenerObject
+  ): void {}
   dispatchEvent(): boolean {
     return true
   }
@@ -51,20 +61,79 @@ class GlobalMockMIDIInput extends GlobalMockMIDIPort {
   override readonly type: MIDIPortType = "input"
   onmidimessage: ((this: MIDIInput, ev: MIDIMessageEvent) => unknown) | null =
     null
+  private _messageListeners: Array<(event: MIDIMessageEvent) => void> = []
+
+  override addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject
+  ): void {
+    if (type === "midimessage" && typeof listener === "function") {
+      this._messageListeners.push(listener as (event: MIDIMessageEvent) => void)
+    }
+  }
+
+  override removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject
+  ): void {
+    if (type === "midimessage" && typeof listener === "function") {
+      const idx = this._messageListeners.indexOf(
+        listener as (event: MIDIMessageEvent) => void
+      )
+      if (idx >= 0) this._messageListeners.splice(idx, 1)
+    }
+  }
+
+  dispatchMidiMessage(event: MIDIMessageEvent): void {
+    for (const listener of this._messageListeners) {
+      listener(event)
+    }
+    this.onmidimessage?.call(this as unknown as MIDIInput, event)
+  }
 }
 
 class GlobalMockMIDIAccess {
-  readonly inputs: MIDIInputMap = new Map()
+  inputs: Map<string, GlobalMockMIDIInput> = new Map()
   readonly outputs: MIDIOutputMap = new Map()
   readonly sysexEnabled: boolean = false
   onstatechange:
     | ((this: MIDIAccess, ev: MIDIConnectionEvent) => unknown)
     | null = null
+  private _stateChangeListeners: StateChangeListener[] = []
 
-  addEventListener(): void {}
-  removeEventListener(): void {}
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject
+  ): void {
+    if (type === "statechange" && typeof listener === "function") {
+      this._stateChangeListeners.push(listener as StateChangeListener)
+    }
+  }
+
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject
+  ): void {
+    if (type === "statechange" && typeof listener === "function") {
+      const idx = this._stateChangeListeners.indexOf(
+        listener as StateChangeListener
+      )
+      if (idx >= 0) this._stateChangeListeners.splice(idx, 1)
+    }
+  }
+
   dispatchEvent(): boolean {
     return true
+  }
+
+  dispatchStateChange(port: GlobalMockMIDIInput | null): void {
+    const event = {
+      port: port as unknown as MIDIPort,
+    } as MIDIConnectionEvent
+    for (const listener of this._stateChangeListeners) {
+      listener(event)
+    }
+    this.onstatechange?.call(this as unknown as MIDIAccess, event)
   }
 }
 
@@ -91,44 +160,34 @@ Object.defineProperty(globalThis, "MIDIAccess", {
 // Test mock interfaces and state management
 // ===========================================================================
 
-export interface TestMIDIInput {
-  id: string
-  name: string
-  manufacturer: string
-  onmidimessage: ((event: TestMIDIMessageEvent) => void) | null
-}
+// Export the mock input type for tests
+export type TestMIDIInput = GlobalMockMIDIInput
 
 export interface TestMIDIMessageEvent {
   data: Uint8Array
   timeStamp: number
 }
 
-export interface TestMIDIAccess {
-  inputs: Map<string, TestMIDIInput>
-  onstatechange: (() => void) | null
-}
+// Export the mock access type for tests
+export type TestMIDIAccess = GlobalMockMIDIAccess
 
-let mockMIDIAccess: TestMIDIAccess | null = null
-let mockRequestMIDIAccessFn: Mock<() => Promise<TestMIDIAccess>>
+let mockMIDIAccess: GlobalMockMIDIAccess | null = null
+let mockRequestMIDIAccessFn: Mock<() => Promise<GlobalMockMIDIAccess>>
 
 function createMockMIDIInput(
   id: string,
   name: string,
   manufacturer = "Mock Manufacturer"
-): TestMIDIInput {
-  return {
-    id,
-    name,
-    manufacturer,
-    onmidimessage: null,
-  }
+): GlobalMockMIDIInput {
+  const input = new GlobalMockMIDIInput()
+  input.id = id
+  input.name = name
+  input.manufacturer = manufacturer
+  return input
 }
 
-function createMockMIDIAccess(): TestMIDIAccess {
-  return {
-    inputs: new Map(),
-    onstatechange: null,
-  }
+function createMockMIDIAccess(): GlobalMockMIDIAccess {
+  return new GlobalMockMIDIAccess()
 }
 
 export function getMockMIDIAccess(): TestMIDIAccess | null {
@@ -156,8 +215,8 @@ export function addMockMIDIInput(
   }
   const input = createMockMIDIInput(id, name, manufacturer)
   mockMIDIAccess.inputs.set(id, input)
-  // Trigger state change if handler is set
-  mockMIDIAccess.onstatechange?.()
+  // Trigger state change event for effect-web-midi streams
+  mockMIDIAccess.dispatchStateChange(input)
   return input
 }
 
@@ -166,8 +225,10 @@ export function addMockMIDIInput(
  */
 export function removeMockMIDIInput(id: string): void {
   if (!mockMIDIAccess) return
+  const input = mockMIDIAccess.inputs.get(id)
   mockMIDIAccess.inputs.delete(id)
-  mockMIDIAccess.onstatechange?.()
+  // Trigger state change event for effect-web-midi streams
+  mockMIDIAccess.dispatchStateChange(input ?? null)
 }
 
 /**
@@ -179,11 +240,11 @@ export function simulateMIDINoteOn(
   velocity = 100,
   timestamp = performance.now()
 ): void {
-  if (!input.onmidimessage) return
-  input.onmidimessage({
+  const event = {
     data: new Uint8Array([NOTE_ON, note, velocity]),
     timeStamp: timestamp,
-  })
+  } as MIDIMessageEvent
+  input.dispatchMidiMessage(event)
 }
 
 /**
@@ -195,11 +256,11 @@ export function simulateMIDINoteOff(
   velocity = 0,
   timestamp = performance.now()
 ): void {
-  if (!input.onmidimessage) return
-  input.onmidimessage({
+  const event = {
     data: new Uint8Array([NOTE_OFF, note, velocity]),
     timeStamp: timestamp,
-  })
+  } as MIDIMessageEvent
+  input.dispatchMidiMessage(event)
 }
 
 /**
@@ -210,11 +271,11 @@ export function simulateMIDINoteOnZeroVelocity(
   note: number,
   timestamp = performance.now()
 ): void {
-  if (!input.onmidimessage) return
-  input.onmidimessage({
+  const event = {
     data: new Uint8Array([NOTE_ON, note, 0]),
     timeStamp: timestamp,
-  })
+  } as MIDIMessageEvent
+  input.dispatchMidiMessage(event)
 }
 
 /**
