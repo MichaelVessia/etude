@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, useRef } from "react"
 import type { MidiPitch, Velocity, Milliseconds } from "@etude/shared"
-import { Effect, Record as EffectRecord } from "effect"
+import { Effect, Record as EffectRecord, Stream, Fiber, pipe, Predicate } from "effect"
 import * as EMIDIAccess from "effect-web-midi/EMIDIAccess"
 import type * as EMIDIInput from "effect-web-midi/EMIDIInput"
+import * as Parsing from "effect-web-midi/Parsing"
 
 export interface MidiDevice {
   id: string
@@ -30,12 +31,6 @@ export interface UseMidiResult {
   /** Enable simulation mode (sets isConnected to true in dev) */
   enableSimulation: () => void
 }
-
-// MIDI status bytes
-const NOTE_OFF_MIN = 0x80
-const NOTE_OFF_MAX = 0x8f
-const NOTE_ON_MIN = 0x90
-const NOTE_ON_MAX = 0x9f
 
 const STORAGE_KEY = "etude:midi-device"
 
@@ -77,13 +72,18 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
   const [midiAccess, setMidiAccess] = useState<EMIDIAccess.EMIDIAccessInstance | null>(null)
   const [devices, setDevices] = useState<MidiDevice[]>([])
   const [selectedDevice, setSelectedDevice] = useState<MidiDevice | null>(null)
-  const [selectedInput, setSelectedInput] = useState<MIDIInput | null>(null)
+  const [isStreamActive, setIsStreamActive] = useState(false)
   const [lastNote, setLastNote] = useState<MidiNoteEvent | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [simulationMode, setSimulationMode] = useState(false)
 
-  // Keep track of raw MIDIAccess for message handling (will be refactored in US-004)
+  // Keep track of raw MIDIAccess for state change handler (will be refactored in US-005)
   const rawMidiAccessRef = useRef<MIDIAccess | null>(null)
+  // Keep track of message stream fiber for cleanup
+  const messageFiberRef = useRef<Fiber.RuntimeFiber<void, unknown> | null>(null)
+  // Stable ref to onNote callback for use in stream
+  const onNoteRef = useRef(onNote)
+  onNoteRef.current = onNote
 
   // Request MIDI access on mount using effect-web-midi
   useEffect(() => {
@@ -151,59 +151,55 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
     }
   }, [midiAccess])
 
-  // Handle MIDI messages
-  const handleMidiMessage = useCallback(
-    (event: MIDIMessageEvent) => {
-      const [status, note, velocity] = event.data ?? []
-      if (status === undefined || note === undefined) return
-
-      let isOn = false
-      if (status >= NOTE_ON_MIN && status <= NOTE_ON_MAX && velocity! > 0) {
-        isOn = true
-      } else if (
-        (status >= NOTE_OFF_MIN && status <= NOTE_OFF_MAX) ||
-        (status >= NOTE_ON_MIN && status <= NOTE_ON_MAX && velocity === 0)
-      ) {
-        isOn = false
-      } else {
-        // Ignore other MIDI messages (control change, pitch bend, etc.)
-        return
-      }
-
-      const noteEvent: MidiNoteEvent = {
-        pitch: note as MidiPitch,
-        velocity: (velocity ?? 0) as Velocity,
-        timestamp: event.timeStamp as Milliseconds,
-        on: isOn,
-      }
-
-      setLastNote(noteEvent)
-      onNote?.(noteEvent)
-    },
-    [onNote]
-  )
-
-  // Connect to selected device (uses raw MIDIAccess, will be refactored in US-004)
+  // Connect to selected device using effect-web-midi message stream
   useEffect(() => {
-    const rawAccess = rawMidiAccessRef.current
-    if (!rawAccess || !selectedDevice) {
-      setSelectedInput(null)
+    if (!midiAccess || !selectedDevice) {
+      setIsStreamActive(false)
       return
     }
 
-    const input = rawAccess.inputs.get(selectedDevice.id)
-    if (!input) {
-      setSelectedInput(null)
-      return
-    }
+    // Create a branded input ID from the device ID
+    const inputId = selectedDevice.id as EMIDIInput.Id
 
-    input.onmidimessage = handleMidiMessage
-    setSelectedInput(input)
+    // Build the message stream with parsing
+    const messageStream = pipe(
+      EMIDIAccess.makeMessagesStreamByInputId(inputId),
+      Parsing.withParsedDataField,
+      Stream.filter(
+        Predicate.or(Parsing.isNotePress, Parsing.isNoteRelease)
+      ),
+      Stream.tap((msg) =>
+        Effect.sync(() => {
+          const payload = msg.midiMessage
+          const isOn = payload._tag === "Note Press"
+          const noteEvent: MidiNoteEvent = {
+            pitch: (isOn ? payload.note : payload.note) as MidiPitch,
+            velocity: (isOn ? payload.velocity : 0) as Velocity,
+            timestamp: msg.capturedAt.getTime() as Milliseconds,
+            on: isOn,
+          }
+          setLastNote(noteEvent)
+          onNoteRef.current?.(noteEvent)
+        })
+      ),
+      Stream.runDrain,
+      Effect.provide(EMIDIAccess.layer())
+    )
+
+    // Run the stream as a fiber
+    const fiber = Effect.runFork(messageStream)
+    messageFiberRef.current = fiber
+    setIsStreamActive(true)
 
     return () => {
-      input.onmidimessage = null
+      // Cleanup: interrupt the fiber
+      if (messageFiberRef.current) {
+        Effect.runFork(Fiber.interrupt(messageFiberRef.current))
+        messageFiberRef.current = null
+      }
+      setIsStreamActive(false)
     }
-  }, [midiAccess, selectedDevice, handleMidiMessage])
+  }, [midiAccess, selectedDevice])
 
   const selectDevice = useCallback(
     (id: string | null) => {
@@ -243,7 +239,7 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
 
   return {
     isSupported,
-    isConnected: selectedInput !== null || simulationMode,
+    isConnected: isStreamActive || simulationMode,
     devices,
     selectedDevice,
     selectDevice,

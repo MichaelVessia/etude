@@ -55,27 +55,31 @@
       "description": "As a user, I want MIDI note events streamed from my device using effect-web-midi's typed message parsing.",
       "acceptanceCriteria": [
         "Import EMIDIInput and Parsing from effect-web-midi",
-        "Replace manual onmidimessage handler with EMIDIInput.makeMessagesStreamById()",
+        "Replace manual onmidimessage handler with EMIDIInput.makeMessagesStreamById(inputId)",
         "Pipe through Parsing.withParsedDataField for typed messages",
-        "Handle 'Note Press' and 'Note Release' tags from parsed messages",
+        "Use Stream.filter with Predicate.or(Parsing.isNotePress, Parsing.isNoteRelease) to filter note events",
+        "Extract pitch/velocity from parsed message data field",
         "Run stream with Effect.runFork, cleanup with Fiber.interrupt on unmount",
+        "Provide EMIDIAccess layer (layerDefault or layerSoftwareSynthSupported) to run the stream",
         "Preserve existing MidiNoteEvent interface (pitch, velocity, timestamp, on)",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Refactored useMidi message subscription to use effect-web-midi streams. Uses EMIDIAccess.makeMessagesStreamByInputId() for typed message stream. Pipes through Parsing.withParsedDataField for automatic message parsing. Filters with Predicate.or(Parsing.isNotePress, Parsing.isNoteRelease). Extracts pitch/velocity from parsed midiMessage payload. Runs stream with Effect.runFork, cleanup with Fiber.interrupt on unmount. Provides EMIDIAccess.layer(). Removed manual MIDI status byte parsing. MidiNoteEvent interface preserved. Typecheck passes. Note: Raw navigator.requestMIDIAccess() still used for state change handler (will be removed in US-005)."
     },
     {
       "id": "US-005",
       "title": "Add device hot-plug support using effect-web-midi streams",
       "description": "As a user, I want the device list to update automatically when I connect or disconnect MIDI devices.",
       "acceptanceCriteria": [
-        "Use EMIDIAccess.makeAllPortsStateChangesStream() to watch connection events",
-        "Refresh device list when device state changes to 'connected' or 'disconnected'",
+        "Use EMIDIAccess.makeAllPortsStateChangesStreamInContext() to watch connection events",
+        "Handle events with shape { port, newState } where newState.ofDevice indicates connection status",
+        "Refresh device list when device connects or disconnects (check newState.ofDevice === 'disconnected')",
+        "Remove raw navigator.requestMIDIAccess() usage for onstatechange handler",
         "Run state change stream alongside message stream",
-        "Properly cleanup both streams on unmount",
+        "Properly cleanup both streams on unmount using Fiber.interrupt",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],

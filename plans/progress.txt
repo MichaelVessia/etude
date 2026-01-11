@@ -39,3 +39,29 @@
   - Existing tests may need updates when US-005 removes all raw MIDIAccess usage
 - Ready for US-004 (message subscription refactor)
 
+## US-004: Refactor useMidi message subscription to use effect-web-midi (DONE)
+- Updated packages/client/src/hooks/useMidi.ts:
+  - Added imports: `Stream`, `Fiber`, `pipe`, `Predicate` from effect
+  - Added import for `Parsing` from effect-web-midi/Parsing
+  - Removed manual MIDI status byte constants (NOTE_OFF_MIN, etc.)
+  - Removed `handleMidiMessage` callback and manual message parsing
+  - Replaced `selectedInput` state with `isStreamActive` boolean
+  - Added `messageFiberRef` to track the running stream fiber
+  - Added `onNoteRef` for stable callback reference in stream
+- Message subscription flow now uses:
+  - `EMIDIAccess.makeMessagesStreamByInputId(inputId)` for typed message stream
+  - `Parsing.withParsedDataField` for automatic MIDI message parsing
+  - `Stream.filter` with `Predicate.or(Parsing.isNotePress, Parsing.isNoteRelease)` to filter note events
+  - `Stream.tap` to extract pitch/velocity from parsed `midiMessage` payload
+  - `Effect.runFork` to run stream as fiber
+  - `Fiber.interrupt` on unmount for cleanup
+  - `Effect.provide(EMIDIAccess.layer())` for layer provision
+- Key changes:
+  - `isConnected` now based on `isStreamActive` instead of `selectedInput !== null`
+  - Timestamp uses `msg.capturedAt.getTime()` from parsed message
+  - Velocity for note release is 0 (not from payload, since NoteReleasePayload doesn't have velocity)
+- Typecheck passes
+- Tests pass (useMidi tests remain skipped pending US-005)
+- NOTE: Raw `navigator.requestMIDIAccess()` still used for state change handler (will be removed in US-005)
+- Ready for US-005 (hot-plug support with effect-web-midi streams)
+
