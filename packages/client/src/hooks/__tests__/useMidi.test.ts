@@ -238,6 +238,9 @@ describe.skipIf(skipMidiTests)("useMidi", () => {
         expect(result.current.isConnected).toBe(true)
       })
 
+      // Wait for the effect-web-midi stream to actually register its listener
+      await input.waitForMessageListener()
+
       act(() => {
         simulateMIDINoteOn(input, 60, 100, 1000)
       })
@@ -313,6 +316,9 @@ describe.skipIf(skipMidiTests)("useMidi", () => {
         expect(result.current.isConnected).toBe(true)
       })
 
+      // Wait for the effect-web-midi stream to actually register its listener
+      await input.waitForMessageListener()
+
       act(() => {
         simulateMIDINoteOnZeroVelocity(input, 60, 2000)
       })
@@ -347,6 +353,9 @@ describe.skipIf(skipMidiTests)("useMidi", () => {
       await waitFor(() => {
         expect(result.current.isConnected).toBe(true)
       })
+
+      // Wait for the effect-web-midi stream to actually register its listener
+      await input.waitForMessageListener()
 
       expect(result.current.lastNote).toBeNull()
 
