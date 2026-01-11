@@ -14,6 +14,7 @@
     "@etude/shared": "workspace:*",
     "@tonejs/midi": "^2.0.28",
     "effect": "*",
+    "effect-web-midi": "^0.1.16",
     "react": "*",
     "react-dom": "*",
     "tone": "^15.1.22",

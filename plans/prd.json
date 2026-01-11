@@ -13,8 +13,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Installed effect-web-midi@0.1.16 via bun add. Dependency added to packages/client/package.json. Typecheck passes."
     },
     {
       "id": "US-002",
@@ -42,7 +42,8 @@
         "Filter to input devices only",
         "Provide EMIDIAccess.layerDefault to run the effect",
         "Preserve existing MidiDevice interface shape (id, name, manufacturer)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
       "passes": false,
@@ -59,7 +60,8 @@
         "Handle 'Note Press' and 'Note Release' tags from parsed messages",
         "Run stream with Effect.runFork, cleanup with Fiber.interrupt on unmount",
         "Preserve existing MidiNoteEvent interface (pitch, velocity, timestamp, on)",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
       "passes": false,
@@ -74,7 +76,8 @@
         "Refresh device list when device state changes to 'connected' or 'disconnected'",
         "Run state change stream alongside message stream",
         "Properly cleanup both streams on unmount",
-        "Typecheck passes"
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
       "passes": false,

@@ -2,3 +2,10 @@
 # Feature: web-midi-effect-wrapper
 # Started: 2026-01-11
 
+## US-001: Add effect-web-midi dependency (DONE)
+- Ran `bun add effect-web-midi` in packages/client
+- Installed version 0.1.16
+- Verified dependency in packages/client/package.json:17
+- Typecheck passes
+- Ready to proceed with US-002 (StorageService) or US-003 (device listing refactor)
+
