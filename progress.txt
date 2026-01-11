@@ -1,0 +1,15 @@
+2026-01-11: RPC Client Tests Complete (US-003)
+
+Added PieceRpcClient tests in packages/client/src/runtime/__tests__/PieceRpcClient.test.ts
+
+Coverage:
+- listPieces: success with full Piece decoding, empty array case
+- getPiece: success decoding, PieceNotFound error
+- getAttempts: success with Attempt[] decoding, empty array case
+- getPieceNotes: success with NoteEvent[] decoding, PieceNotFound error
+- importPiece: success with ImportPieceResult, alreadyExists flag, all ParseError reasons (MalformedXml, NoPianoPart, EmptyPiece, UnsupportedFeature)
+- Network errors: timeout, 500, malformed JSON
+
+Combined with existing SessionRpcClient.test.ts, the PRD plan (plans/01-rpc-client-tests.md) is now complete.
+
+All success criteria met. Tests run locally via `bun test packages/client/src/runtime/__tests__/`.
