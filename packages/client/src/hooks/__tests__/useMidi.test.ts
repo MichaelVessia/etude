@@ -222,27 +222,23 @@ describe.skipIf(skipMidiTests)("useMidi", () => {
     it("calls onNote callback for note on events", async () => {
       const onNote = mock((_event: MidiNoteEvent) => {})
       const input = addMockMIDIInput("device-1", "Piano", "Yamaha")
-      console.log(`[Test] Input created, id=${input.id}`)
 
       const { result } = renderHook(() => useMidi(onNote))
 
       await waitFor(() => {
         expect(result.current.devices).toHaveLength(1)
       })
-      console.log(`[Test] Devices discovered: ${result.current.devices.map(d => d.id).join(", ")}`)
 
       act(() => {
         result.current.selectDevice("device-1")
       })
-      console.log(`[Test] Device selected, isConnected=${result.current.isConnected}`)
 
       // Wait for BOTH stream to be active AND listener to be registered
       // Combining in one waitFor ensures Effect's fiber gets scheduling time
       await waitFor(() => {
-        console.log(`[Test] Polling: isConnected=${result.current.isConnected}, hasListener=${input.hasMessageListener()}`)
         expect(result.current.isConnected).toBe(true)
         expect(input.hasMessageListener()).toBe(true)
-      }, { timeout: 3000 })
+      })
 
       act(() => {
         simulateMIDINoteOn(input, 60, 100, 1000)

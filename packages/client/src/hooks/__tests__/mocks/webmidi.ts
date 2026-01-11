@@ -87,10 +87,8 @@ class GlobalMockMIDIInput extends GlobalMockMIDIPort {
     type: string,
     listener: EventListenerOrEventListenerObject
   ): void {
-    console.log(`[MIDI Mock] addEventListener called: type=${type}, listenerType=${typeof listener}`)
     if (type === "midimessage" && typeof listener === "function") {
       this._messageListeners.push(listener as (event: MIDIMessageEvent) => void)
-      console.log(`[MIDI Mock] Listener added, count=${this._messageListeners.length}`)
       // Notify any waiters that a listener was added
       for (const resolve of this._listenerAddedResolvers) {
         resolve()
@@ -245,10 +243,7 @@ export function getMockMIDIAccess(): TestMIDIAccess | null {
 
 export function resetWebMidiMocks(): void {
   mockMIDIAccess = createMockMIDIAccess()
-  mockRequestMIDIAccessFn = mock(() => {
-    console.log(`[MIDI Mock] requestMIDIAccess called, inputs count=${mockMIDIAccess?.inputs.size}`)
-    return Promise.resolve(mockMIDIAccess!)
-  })
+  mockRequestMIDIAccessFn = mock(() => Promise.resolve(mockMIDIAccess!))
 }
 
 // Initialize
