@@ -1,0 +1,4 @@
+# Ralph Progress Log
+# Feature: web-midi-effect-wrapper
+# Started: 2026-01-11
+
