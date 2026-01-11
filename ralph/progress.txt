@@ -1,0 +1,27 @@
+# Ralph Progress Log
+
+## Feature: RPC Client Tests
+## Branch: ralph/rpc-client-tests
+
+---
+
+### 2026-01-11 - US-001 Complete
+
+**Status:** US-001 (RPC test utilities) was already implemented.
+
+**Files:**
+- `packages/client/src/runtime/__tests__/test-utils.ts` (188 lines)
+
+**What exists:**
+- `makeRpcTestLayer(rpcs, responses, url)`: Creates a test layer for RPC clients with mocked HTTP responses. Supports both success and error mocking via `MockRpcResponse` type.
+- `makeMockNetworkErrorLayer(errorType)`: Creates layers that simulate network failures (timeout, 500, malformed JSON).
+- `makeRpcNetworkErrorLayer(errorType, url)`: Combines network error simulation with RPC protocol layer.
+
+**Verification:**
+- Typecheck passes: `bun run typecheck`
+- All 331 tests pass: `bun test`
+
+**Next:** US-002 (Test SessionRpcClient methods) is the next priority.
+
+---
+
