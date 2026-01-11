@@ -59,10 +59,29 @@ class GlobalMockMIDIPort {
 
 class GlobalMockMIDIInput extends GlobalMockMIDIPort {
   override readonly type: MIDIPortType = "input"
-  onmidimessage: ((this: MIDIInput, ev: MIDIMessageEvent) => unknown) | null =
-    null
+  private _onmidimessage:
+    | ((this: MIDIInput, ev: MIDIMessageEvent) => unknown)
+    | null = null
   private _messageListeners: Array<(event: MIDIMessageEvent) => void> = []
   private _listenerAddedResolvers: Array<() => void> = []
+
+  // Use getter/setter so we can notify when onmidimessage is set
+  get onmidimessage(): ((this: MIDIInput, ev: MIDIMessageEvent) => unknown) | null {
+    return this._onmidimessage
+  }
+
+  set onmidimessage(
+    value: ((this: MIDIInput, ev: MIDIMessageEvent) => unknown) | null
+  ) {
+    this._onmidimessage = value
+    if (value !== null) {
+      // Notify any waiters that a listener was added
+      for (const resolve of this._listenerAddedResolvers) {
+        resolve()
+      }
+      this._listenerAddedResolvers = []
+    }
+  }
 
   override addEventListener(
     type: string,
@@ -79,11 +98,12 @@ class GlobalMockMIDIInput extends GlobalMockMIDIPort {
   }
 
   /**
-   * Returns a promise that resolves when a midimessage listener is added.
+   * Returns a promise that resolves when a midimessage listener is added
+   * (via addEventListener or onmidimessage setter).
    * Use this in tests to wait for the stream to be ready.
    */
   waitForMessageListener(): Promise<void> {
-    if (this._messageListeners.length > 0) {
+    if (this._messageListeners.length > 0 || this._onmidimessage !== null) {
       return Promise.resolve()
     }
     return new Promise((resolve) => {
