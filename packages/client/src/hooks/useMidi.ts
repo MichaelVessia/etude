@@ -196,9 +196,15 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
         })
       ),
       Stream.runDrain,
-      Effect.provide(EMIDIAccess.layer())
+      Effect.provide(EMIDIAccess.layer()),
+      Effect.tapErrorCause((cause) =>
+        Effect.sync(() => {
+          console.error("[useMidi] Stream error:", cause)
+        })
+      )
     )
 
+    console.log("[useMidi] Starting message stream fiber for input:", inputId)
     // Run the stream as a fiber
     const fiber = Effect.runFork(messageStream)
     messageFiberRef.current = fiber
