@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, useRef } from "react"
 import type { MidiPitch, Velocity, Milliseconds } from "@etude/shared"
-import { Effect, Record as EffectRecord, Stream, Fiber, pipe, Predicate } from "effect"
+import { Effect, Stream, Fiber, pipe, Predicate } from "effect"
 import * as EMIDIAccess from "effect-web-midi/EMIDIAccess"
-import type * as EMIDIInput from "effect-web-midi/EMIDIInput"
+import * as EMIDIInput from "effect-web-midi/EMIDIInput"
 import * as Parsing from "effect-web-midi/Parsing"
 
 export interface MidiDevice {
@@ -54,19 +54,6 @@ function storeDeviceName(name: string | null): void {
   }
 }
 
-/**
- * Convert effect-web-midi IdToInstanceMap to MidiDevice array.
- */
-function inputsRecordToDevices(
-  inputs: EMIDIInput.IdToInstanceMap
-): MidiDevice[] {
-  return EffectRecord.toEntries(inputs).map(([id, input]) => ({
-    id,
-    name: input.name ?? "Unknown",
-    manufacturer: input.manufacturer ?? "Unknown",
-  }))
-}
-
 export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult {
   const [isSupported] = useState(() => "requestMIDIAccess" in navigator)
   const [midiAccess, setMidiAccess] = useState<EMIDIAccess.EMIDIAccessInstance | null>(null)
@@ -115,11 +102,15 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
     if (!midiAccess) return
 
     const updateDevices = () => {
-      // Use Effect.runPromiseExit to get typed inputs
-      Effect.runPromiseExit(EMIDIAccess.getInputsRecord(midiAccess))
+      // Use Effect.runPromiseExit to get typed inputs as array
+      Effect.runPromiseExit(EMIDIAccess.getInputsArray(midiAccess))
         .then((exit) => {
           if (exit._tag === "Success") {
-            const inputDevices = inputsRecordToDevices(exit.value)
+            const inputDevices = exit.value.map((input) => ({
+              id: input.id,
+              name: input.name ?? "Unknown",
+              manufacturer: input.manufacturer ?? "Unknown",
+            }))
             setDevices(inputDevices)
 
             // Auto-select remembered device if no device currently selected
@@ -186,7 +177,7 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
           const payload = msg.midiMessage
           const isOn = payload._tag === "Note Press"
           const noteEvent: MidiNoteEvent = {
-            pitch: (isOn ? payload.note : payload.note) as MidiPitch,
+            pitch: payload.note as MidiPitch,
             velocity: (isOn ? payload.velocity : 0) as Velocity,
             timestamp: msg.capturedAt.getTime() as Milliseconds,
             on: isOn,

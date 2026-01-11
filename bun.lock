@@ -28,7 +28,7 @@
         "@etude/shared": "workspace:*",
         "@tonejs/midi": "^2.0.28",
         "effect": "*",
-        "effect-web-midi": "^0.1.16",
+        "effect-web-midi": "^0.1.18",
         "react": "*",
         "react-dom": "*",
         "tone": "^15.1.22",
@@ -684,7 +684,7 @@
 
     "effect": ["effect@3.19.14", "", { "dependencies": { "@standard-schema/spec": "^1.0.0", "fast-check": "^3.23.1" } }, "sha512-3vwdq0zlvQOxXzXNKRIPKTqZNMyGCdaFUBfMPqpsyzZDre67kgC1EEHDV4EoQTovJ4w5fmJW756f86kkuz7WFA=="],
 
-    "effect-web-midi": ["effect-web-midi@0.1.16", "", { "dependencies": { "effect": "^3.19.14" } }, "sha512-ipcdQbHlLQjWE1GHLqYG86/S5G9nG4im+wMsCC27dmhMvOmryCNeTvimSH5aK3MgGwiYw9EU32BG5JZ5JFxU1g=="],
+    "effect-web-midi": ["effect-web-midi@0.1.18", "", { "dependencies": { "effect": "^3.19.14" } }, "sha512-W8StkNPgJEm8Z65Hu6Y/X9rY64CxTuxnGk5XDEzChzlKpaTJYz80kH1vVqu0zu4NRzQlKX12WhWo15oidYUBRQ=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.267", "", {}, "sha512-0Drusm6MVRXSOJpGbaSVgcQsuB4hEkMpHXaVstcPmhu5LIedxs1xNK/nIxmQIU/RPC0+1/o0AVZfBTkTNJOdUw=="],
 
