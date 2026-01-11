@@ -61,7 +61,7 @@ export {
   simulateMIDINoteOn,
   simulateMIDINoteOff,
   simulateMIDINoteOnZeroVelocity,
-  type MockMIDIInput,
-  type MockMIDIMessageEvent,
-  type MockMIDIAccess,
+  type TestMIDIInput,
+  type TestMIDIMessageEvent,
+  type TestMIDIAccess,
 } from "./webmidi"

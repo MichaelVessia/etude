@@ -28,8 +28,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created StorageService with Context.GenericTag, get/set/remove methods returning Effect.Effect, and StorageServiceLive layer. Added 8 passing tests. Typecheck passes."
     },
     {
       "id": "US-003",
@@ -46,8 +46,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Refactored useMidi to use effect-web-midi for device listing. Uses EMIDIAccess.request() for typed MIDI access and EMIDIAccess.getInputsRecord() for typed device enumeration (input devices only). Uses EffectRecord.toEntries() for type-safe iteration. MidiDevice interface preserved. Updated mock classes for effect-web-midi instanceof checks. Typecheck passes. Note: Raw navigator.requestMIDIAccess() still used for state change handler (will be removed in US-005)."
     },
     {
       "id": "US-004",

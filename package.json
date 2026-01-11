@@ -28,5 +28,8 @@
     "oxlint": "^1.36.0",
     "typescript": "^5.9.3",
     "wrangler": "^4.54.0"
+  },
+  "dependencies": {
+    "effect": "^3.19.14"
   }
 }

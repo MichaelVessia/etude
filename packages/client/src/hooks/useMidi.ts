@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, useRef } from "react"
 import type { MidiPitch, Velocity, Milliseconds } from "@etude/shared"
+import { Effect, Record as EffectRecord } from "effect"
+import * as EMIDIAccess from "effect-web-midi/EMIDIAccess"
+import type * as EMIDIInput from "effect-web-midi/EMIDIInput"
 
 export interface MidiDevice {
   id: string
@@ -56,9 +59,22 @@ function storeDeviceName(name: string | null): void {
   }
 }
 
+/**
+ * Convert effect-web-midi IdToInstanceMap to MidiDevice array.
+ */
+function inputsRecordToDevices(
+  inputs: EMIDIInput.IdToInstanceMap
+): MidiDevice[] {
+  return EffectRecord.toEntries(inputs).map(([id, input]) => ({
+    id,
+    name: input.name ?? "Unknown",
+    manufacturer: input.manufacturer ?? "Unknown",
+  }))
+}
+
 export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult {
   const [isSupported] = useState(() => "requestMIDIAccess" in navigator)
-  const [midiAccess, setMidiAccess] = useState<MIDIAccess | null>(null)
+  const [midiAccess, setMidiAccess] = useState<EMIDIAccess.EMIDIAccessInstance | null>(null)
   const [devices, setDevices] = useState<MidiDevice[]>([])
   const [selectedDevice, setSelectedDevice] = useState<MidiDevice | null>(null)
   const [selectedInput, setSelectedInput] = useState<MIDIInput | null>(null)
@@ -66,50 +82,72 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
   const [error, setError] = useState<string | null>(null)
   const [simulationMode, setSimulationMode] = useState(false)
 
-  // Request MIDI access on mount
+  // Keep track of raw MIDIAccess for message handling (will be refactored in US-004)
+  const rawMidiAccessRef = useRef<MIDIAccess | null>(null)
+
+  // Request MIDI access on mount using effect-web-midi
   useEffect(() => {
     if (!isSupported) return
 
-    navigator
-      .requestMIDIAccess()
-      .then((access) => {
-        setMidiAccess(access)
-        setError(null)
+    // Use Effect.runPromiseExit to handle the effect-web-midi typed effect
+    // and convert to plain promise for React state management
+    Effect.runPromiseExit(EMIDIAccess.request())
+      .then((exit) => {
+        if (exit._tag === "Success") {
+          setMidiAccess(exit.value)
+          setError(null)
+        } else {
+          const cause = exit.cause
+          const message = cause._tag === "Fail"
+            ? String(cause.error)
+            : "Unknown MIDI error"
+          setError(`MIDI access denied: ${message}`)
+        }
       })
-      .catch((err) => {
-        setError(`MIDI access denied: ${err.message}`)
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err)
+        setError(`MIDI access error: ${message}`)
       })
   }, [isSupported])
 
-  // Update device list when MIDI access changes
+  // Update device list when MIDI access changes using effect-web-midi
   useEffect(() => {
     if (!midiAccess) return
 
     const updateDevices = () => {
-      const inputDevices: MidiDevice[] = []
-      midiAccess.inputs.forEach((input) => {
-        inputDevices.push({
-          id: input.id,
-          name: input.name ?? "Unknown",
-          manufacturer: input.manufacturer ?? "Unknown",
-        })
-      })
-      setDevices(inputDevices)
+      // Use Effect.runPromiseExit to get typed inputs
+      Effect.runPromiseExit(EMIDIAccess.getInputsRecord(midiAccess))
+        .then((exit) => {
+          if (exit._tag === "Success") {
+            const inputDevices = inputsRecordToDevices(exit.value)
+            setDevices(inputDevices)
 
-      // Auto-select remembered device if no device currently selected
-      setSelectedDevice((current) => {
-        if (current !== null) return current
-        const storedName = getStoredDeviceName()
-        if (!storedName) return null
-        return inputDevices.find((d) => d.name === storedName) ?? null
-      })
+            // Auto-select remembered device if no device currently selected
+            setSelectedDevice((current) => {
+              if (current !== null) return current
+              const storedName = getStoredDeviceName()
+              if (!storedName) return null
+              return inputDevices.find((d) => d.name === storedName) ?? null
+            })
+          }
+        })
+        .catch(() => {
+          // Ignore errors during device enumeration
+        })
     }
 
-    updateDevices()
-    midiAccess.onstatechange = updateDevices
+    // Get the raw MIDIAccess for state change handler (will be refactored in US-005)
+    // For now we need to request it again to get the raw access for onstatechange
+    navigator.requestMIDIAccess().then((rawAccess) => {
+      rawMidiAccessRef.current = rawAccess
+      updateDevices()
+      rawAccess.onstatechange = updateDevices
+    })
 
     return () => {
-      midiAccess.onstatechange = null
+      if (rawMidiAccessRef.current) {
+        rawMidiAccessRef.current.onstatechange = null
+      }
     }
   }, [midiAccess])
 
@@ -145,14 +183,15 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
     [onNote]
   )
 
-  // Connect to selected device
+  // Connect to selected device (uses raw MIDIAccess, will be refactored in US-004)
   useEffect(() => {
-    if (!midiAccess || !selectedDevice) {
+    const rawAccess = rawMidiAccessRef.current
+    if (!rawAccess || !selectedDevice) {
       setSelectedInput(null)
       return
     }
 
-    const input = midiAccess.inputs.get(selectedDevice.id)
+    const input = rawAccess.inputs.get(selectedDevice.id)
     if (!input) {
       setSelectedInput(null)
       return

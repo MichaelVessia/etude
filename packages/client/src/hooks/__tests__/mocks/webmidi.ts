@@ -17,31 +17,105 @@ import { mock, type Mock } from "bun:test"
 const NOTE_ON = 0x90
 const NOTE_OFF = 0x80
 
-export interface MockMIDIInput {
+// ===========================================================================
+// Global Web MIDI API class mocks for effect-web-midi's instanceof checks
+// ===========================================================================
+
+class GlobalMockMIDIPort {
+  readonly id: string = ""
+  readonly name: string | null = null
+  readonly manufacturer: string | null = null
+  readonly version: string | null = null
+  readonly state: MIDIPortDeviceState = "connected"
+  readonly connection: MIDIPortConnectionState = "closed"
+  readonly type: MIDIPortType = "input"
+  onstatechange: ((this: MIDIPort, ev: MIDIConnectionEvent) => unknown) | null =
+    null
+
+  open(): Promise<MIDIPort> {
+    return Promise.resolve(this as unknown as MIDIPort)
+  }
+
+  close(): Promise<MIDIPort> {
+    return Promise.resolve(this as unknown as MIDIPort)
+  }
+
+  addEventListener(): void {}
+  removeEventListener(): void {}
+  dispatchEvent(): boolean {
+    return true
+  }
+}
+
+class GlobalMockMIDIInput extends GlobalMockMIDIPort {
+  override readonly type: MIDIPortType = "input"
+  onmidimessage: ((this: MIDIInput, ev: MIDIMessageEvent) => unknown) | null =
+    null
+}
+
+class GlobalMockMIDIAccess {
+  readonly inputs: MIDIInputMap = new Map()
+  readonly outputs: MIDIOutputMap = new Map()
+  readonly sysexEnabled: boolean = false
+  onstatechange:
+    | ((this: MIDIAccess, ev: MIDIConnectionEvent) => unknown)
+    | null = null
+
+  addEventListener(): void {}
+  removeEventListener(): void {}
+  dispatchEvent(): boolean {
+    return true
+  }
+}
+
+// Apply global mock classes for effect-web-midi's instanceof checks
+Object.defineProperty(globalThis, "MIDIPort", {
+  value: GlobalMockMIDIPort,
+  writable: true,
+  configurable: true,
+})
+
+Object.defineProperty(globalThis, "MIDIInput", {
+  value: GlobalMockMIDIInput,
+  writable: true,
+  configurable: true,
+})
+
+Object.defineProperty(globalThis, "MIDIAccess", {
+  value: GlobalMockMIDIAccess,
+  writable: true,
+  configurable: true,
+})
+
+// ===========================================================================
+// Test mock interfaces and state management
+// ===========================================================================
+
+export interface TestMIDIInput {
   id: string
   name: string
   manufacturer: string
-  onmidimessage: ((event: MockMIDIMessageEvent) => void) | null
+  onmidimessage: ((event: TestMIDIMessageEvent) => void) | null
 }
 
-export interface MockMIDIMessageEvent {
+export interface TestMIDIMessageEvent {
   data: Uint8Array
   timeStamp: number
 }
 
-export interface MockMIDIAccess {
-  inputs: Map<string, MockMIDIInput>
+export interface TestMIDIAccess {
+  inputs: Map<string, TestMIDIInput>
   onstatechange: (() => void) | null
 }
 
-let mockMIDIAccess: MockMIDIAccess | null = null
-let mockRequestMIDIAccessFn: Mock<() => Promise<MockMIDIAccess>>
+let mockMIDIAccess: TestMIDIAccess | null = null
+let mockRequestMIDIAccessFn: Mock<() => Promise<TestMIDIAccess>>
 
 function createMockMIDIInput(
   id: string,
   name: string,
   manufacturer = "Mock Manufacturer"
-): MockMIDIInput {
+): TestMIDIInput {
   return {
     id,
     name,
@@ -50,14 +124,14 @@ function createMockMIDIInput(
   }
 }
 
-function createMockMIDIAccess(): MockMIDIAccess {
+function createMockMIDIAccess(): TestMIDIAccess {
   return {
     inputs: new Map(),
     onstatechange: null,
   }
 }
 
-export function getMockMIDIAccess(): MockMIDIAccess | null {
+export function getMockMIDIAccess(): TestMIDIAccess | null {
   return mockMIDIAccess
 }
 
@@ -76,7 +150,7 @@ export function addMockMIDIInput(
   id: string,
   name: string,
   manufacturer?: string
-): MockMIDIInput {
+): TestMIDIInput {
   if (!mockMIDIAccess) {
     throw new Error("Mock MIDI access not initialized")
   }
@@ -100,7 +174,7 @@ export function removeMockMIDIInput(id: string): void {
  * Simulate a MIDI note on event
  */
 export function simulateMIDINoteOn(
-  input: MockMIDIInput,
+  input: TestMIDIInput,
   note: number,
   velocity = 100,
   timestamp = performance.now()
@@ -116,7 +190,7 @@ export function simulateMIDINoteOn(
  * Simulate a MIDI note off event
  */
 export function simulateMIDINoteOff(
-  input: MockMIDIInput,
+  input: TestMIDIInput,
   note: number,
   velocity = 0,
   timestamp = performance.now()
@@ -132,7 +206,7 @@ export function simulateMIDINoteOff(
  * Simulate a MIDI note on with velocity 0 (alternative note off)
  */
 export function simulateMIDINoteOnZeroVelocity(
-  input: MockMIDIInput,
+  input: TestMIDIInput,
   note: number,
   timestamp = performance.now()
 ): void {
@@ -146,7 +220,7 @@ export function simulateMIDINoteOnZeroVelocity(
 /**
  * Get the mock requestMIDIAccess function
  */
-export function getMockRequestMIDIAccess(): Mock<() => Promise<MockMIDIAccess>> {
+export function getMockRequestMIDIAccess(): Mock<() => Promise<TestMIDIAccess>> {
   return mockRequestMIDIAccessFn
 }
 
