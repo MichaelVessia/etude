@@ -84,8 +84,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added hot-plug support using EMIDIAccess.makeAllPortsStateChangesStream(midiAccess). Removed rawMidiAccessRef and all raw navigator.requestMIDIAccess() usage. State change stream runs alongside message stream via stateChangeFiberRef. Both streams properly cleaned up on unmount with Fiber.interrupt. Device list refreshes on any port state change event. Typecheck passes."
     }
   ]
 }

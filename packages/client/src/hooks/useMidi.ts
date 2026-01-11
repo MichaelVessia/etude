@@ -77,10 +77,10 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
   const [error, setError] = useState<string | null>(null)
   const [simulationMode, setSimulationMode] = useState(false)
 
-  // Keep track of raw MIDIAccess for state change handler (will be refactored in US-005)
-  const rawMidiAccessRef = useRef<MIDIAccess | null>(null)
   // Keep track of message stream fiber for cleanup
   const messageFiberRef = useRef<Fiber.RuntimeFiber<void, unknown> | null>(null)
+  // Keep track of state change stream fiber for cleanup
+  const stateChangeFiberRef = useRef<Fiber.RuntimeFiber<void, unknown> | null>(null)
   // Stable ref to onNote callback for use in stream
   const onNoteRef = useRef(onNote)
   onNoteRef.current = onNote
@@ -136,17 +136,30 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
         })
     }
 
-    // Get the raw MIDIAccess for state change handler (will be refactored in US-005)
-    // For now we need to request it again to get the raw access for onstatechange
-    navigator.requestMIDIAccess().then((rawAccess) => {
-      rawMidiAccessRef.current = rawAccess
-      updateDevices()
-      rawAccess.onstatechange = updateDevices
-    })
+    // Initial device list update
+    updateDevices()
+
+    // Create state change stream for hot-plug support using effect-web-midi
+    const stateChangeStream = pipe(
+      EMIDIAccess.makeAllPortsStateChangesStream(midiAccess),
+      Stream.tap(() =>
+        Effect.sync(() => {
+          // Refresh device list on any port state change (connect/disconnect)
+          updateDevices()
+        })
+      ),
+      Stream.runDrain
+    )
+
+    // Run the state change stream as a fiber
+    const fiber = Effect.runFork(stateChangeStream)
+    stateChangeFiberRef.current = fiber
 
     return () => {
-      if (rawMidiAccessRef.current) {
-        rawMidiAccessRef.current.onstatechange = null
+      // Cleanup: interrupt the state change fiber
+      if (stateChangeFiberRef.current) {
+        Effect.runFork(Fiber.interrupt(stateChangeFiberRef.current))
+        stateChangeFiberRef.current = null
       }
     }
   }, [midiAccess])

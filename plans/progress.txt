@@ -65,3 +65,19 @@
 - NOTE: Raw `navigator.requestMIDIAccess()` still used for state change handler (will be removed in US-005)
 - Ready for US-005 (hot-plug support with effect-web-midi streams)
 
+## US-005: Add device hot-plug support using effect-web-midi streams (DONE)
+- Updated packages/client/src/hooks/useMidi.ts:
+  - Removed `rawMidiAccessRef` (no more raw `MIDIAccess` reference)
+  - Added `stateChangeFiberRef` to track state change stream fiber
+  - Removed raw `navigator.requestMIDIAccess()` call and `onstatechange` handler
+- Hot-plug implementation now uses:
+  - `EMIDIAccess.makeAllPortsStateChangesStream(midiAccess)` for typed state change events
+  - `Stream.tap` to refresh device list on any port state change
+  - `Stream.runDrain` to run the stream
+  - `Effect.runFork` to run stream as fiber
+  - `Fiber.interrupt` on unmount for cleanup
+- Both streams (message and state change) properly cleaned up on unmount
+- All raw Web MIDI API usage has been removed from useMidi hook
+- Typecheck passes
+- All user stories for effect-web-midi integration are now complete
+
