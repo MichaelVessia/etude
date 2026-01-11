@@ -25,3 +25,28 @@
 
 ---
 
+### 2026-01-11 - US-002 Complete
+
+**Status:** US-002 (Test SessionRpcClient methods) complete.
+
+**Files created:**
+- `packages/client/src/runtime/__tests__/SessionRpcClient.test.ts` (340 lines)
+
+**Files modified:**
+- `packages/client/src/runtime/__tests__/test-utils.ts`: Fixed response format to use proper ResponseExitEncoded structure with Schema.ExitEncoded (Exit/Failure with cause). Changed URL from relative `/rpc` to absolute `http://localhost/rpc` but then refactored to use Protocol.make directly, bypassing HTTP altogether.
+
+**Test coverage (10 tests):**
+- `startSession`: encodes payload, decodes SessionStarted, handles SessionError (AlreadyActive), handles PieceNotFound
+- `submitNote`: encodes note data, decodes NoteResult (correct/wrong/extra), handles SessionError (NotStarted)
+- `endSession`: decodes SessionComplete with all fields, handles optional hand accuracy as None, handles SessionError (NotStarted)
+
+**Key fix:** The mock protocol was sending `{ _tag: "Success", ... }` format but RpcClient expects `{ _tag: "Exit", requestId, exit: { _tag: "Success", value } }` format (ResponseExitEncoded). Fixed this for both success and error paths.
+
+**Verification:**
+- Typecheck passes: `bun run typecheck`
+- All 341 tests pass: `bun test`
+
+**Next:** US-003 (Test PieceRpcClient read methods) is the next priority.
+
+---
+
