@@ -1,0 +1,84 @@
+{
+  "project": "Etude",
+  "branchName": "ralph/web-midi-effect-wrapper",
+  "description": "Integrate effect-web-midi library to replace raw Web MIDI API with Effect-based streams and typed errors",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add effect-web-midi dependency",
+      "description": "As a developer, I need the effect-web-midi library installed to use its Effect-based MIDI abstractions.",
+      "acceptanceCriteria": [
+        "Run 'bun add effect-web-midi' in packages/client",
+        "Verify package.json includes effect-web-midi dependency",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Create StorageService for localStorage",
+      "description": "As a developer, I need an Effect-based wrapper for localStorage to safely persist MIDI device selection.",
+      "acceptanceCriteria": [
+        "Create packages/client/src/services/storage.ts",
+        "Export StorageService Context.Tag with get/set/remove methods",
+        "Export StorageServiceLive layer using localStorage",
+        "Each method returns Effect.Effect (get returns string | null)",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Refactor useMidi device listing to use effect-web-midi",
+      "description": "As a user, I want to see available MIDI devices using the effect-web-midi library for typed access.",
+      "acceptanceCriteria": [
+        "Import EMIDIAccess, EMIDIPort from effect-web-midi",
+        "Replace navigator.requestMIDIAccess() with EMIDIAccess.request()",
+        "Replace manual device enumeration with EMIDIPort.FullRecord",
+        "Filter to input devices only",
+        "Provide EMIDIAccess.layerDefault to run the effect",
+        "Preserve existing MidiDevice interface shape (id, name, manufacturer)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Refactor useMidi message subscription to use effect-web-midi",
+      "description": "As a user, I want MIDI note events streamed from my device using effect-web-midi's typed message parsing.",
+      "acceptanceCriteria": [
+        "Import EMIDIInput and Parsing from effect-web-midi",
+        "Replace manual onmidimessage handler with EMIDIInput.makeMessagesStreamById()",
+        "Pipe through Parsing.withParsedDataField for typed messages",
+        "Handle 'Note Press' and 'Note Release' tags from parsed messages",
+        "Run stream with Effect.runFork, cleanup with Fiber.interrupt on unmount",
+        "Preserve existing MidiNoteEvent interface (pitch, velocity, timestamp, on)",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add device hot-plug support using effect-web-midi streams",
+      "description": "As a user, I want the device list to update automatically when I connect or disconnect MIDI devices.",
+      "acceptanceCriteria": [
+        "Use EMIDIAccess.makeAllPortsStateChangesStream() to watch connection events",
+        "Refresh device list when device state changes to 'connected' or 'disconnected'",
+        "Run state change stream alongside message stream",
+        "Properly cleanup both streams on unmount",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
