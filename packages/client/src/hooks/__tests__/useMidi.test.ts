@@ -257,12 +257,7 @@ describe.skipIf(skipMidiTests)("useMidi", () => {
       )
     })
 
-    // NOTE: effect-web-midi's parser only recognizes NOTE_OFF (0x80) with velocity=0x40 (64)
-    // due to being designed for a specific nanoPAD device. Most keyboards use note-on with
-    // velocity=0 for note release, so we test that instead. The raw NOTE_OFF test is skipped.
-    it.skip("calls onNote callback for raw NOTE_OFF messages", async () => {
-      // Skipped: effect-web-midi's Parsing module doesn't recognize standard NOTE_OFF (0x80)
-      // messages with velocity=0. It only accepts velocity=0x40 which is nanoPAD-specific.
+    it("calls onNote callback for raw NOTE_OFF messages", async () => {
       const onNote = mock((_event: MidiNoteEvent) => {})
       const input = addMockMIDIInput("device-1", "Piano", "Yamaha")
 
@@ -278,6 +273,7 @@ describe.skipIf(skipMidiTests)("useMidi", () => {
 
       await waitFor(() => {
         expect(result.current.isConnected).toBe(true)
+        expect(input.hasMessageListener()).toBe(true)
       })
 
       act(() => {
@@ -324,11 +320,11 @@ describe.skipIf(skipMidiTests)("useMidi", () => {
       await waitFor(() => {
         expect(onNote).toHaveBeenCalled()
       })
-      // Note on with velocity 0 is treated as note release by effect-web-midi
+      // Note on with velocity 0 is remapped to note release with velocity 64 by effect-web-midi
       expect(onNote).toHaveBeenCalledWith(
         expect.objectContaining({
           pitch: 60,
-          velocity: 0,
+          velocity: 64,
           on: false,
         })
       )

@@ -178,7 +178,7 @@ export function useMidi(onNote?: (event: MidiNoteEvent) => void): UseMidiResult 
           const isOn = payload._tag === "Note Press"
           const noteEvent: MidiNoteEvent = {
             pitch: payload.note as MidiPitch,
-            velocity: (isOn ? payload.velocity : 0) as Velocity,
+            velocity: payload.velocity as Velocity,
             timestamp: msg.capturedAt.getTime() as Milliseconds,
             on: isOn,
           }
