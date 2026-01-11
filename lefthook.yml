@@ -1,12 +1,5 @@
 pre-commit:
   commands:
-    beads-sync:
-      run: |
-        if command -v bd >/dev/null 2>&1 && [ -d .beads ]; then
-          bd sync --flush-only >/dev/null 2>&1 || echo "Warning: bd sync failed"
-          git add .beads/issues.jsonl 2>/dev/null || true
-        fi
-      priority: 1
     lint-fix:
       glob: "*.{ts,tsx,mjs,js,jsx}"
       run: nix develop --command bunx oxlint --fix {staged_files}
@@ -21,10 +14,5 @@ pre-commit:
 
 post-merge:
   commands:
-    beads-prime:
-      run: |
-        if command -v bd >/dev/null 2>&1 && [ -d .beads ]; then
-          bd prime >/dev/null 2>&1 || true
-        fi
     install-deps:
       run: nix develop --command bun install

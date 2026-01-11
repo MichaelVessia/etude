@@ -7,3 +7,5 @@ dist/
 *.tsbuildinfo
 .alchemy/
 .wrangler/
+plans/
+tasks/
