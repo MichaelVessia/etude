@@ -27,7 +27,7 @@ export function PracticeControls({
 }: PracticeControlsProps) {
   const audio = useAudio()
 
-  // Load MIDI data for playback
+  // Load MIDI data for playback when available
   useEffect(() => {
     if (midiBase64 && audio.isReady) {
       audio.loadMidi(midiBase64)

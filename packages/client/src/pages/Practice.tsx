@@ -45,7 +45,7 @@ export function Practice({ midi, onSelectDevice }: PracticeProps) {
   noteColoringRef.current = noteColoring
 
   // Re-apply note colors after each render (SVG gets replaced by React)
-  // Also reapply when reviewing results (session ended but results exist)
+  // Intentionally no deps: must run after every render to reapply colors to fresh DOM
   useLayoutEffect(() => {
     if (session.isActive || session.results) {
       noteColoringRef.current.reapplyColors()
@@ -57,7 +57,7 @@ export function Practice({ midi, onSelectDevice }: PracticeProps) {
   const extraNotesRef = useRef(extraNotes)
   extraNotesRef.current = extraNotes
 
-  // Playhead callbacks
+  // Playhead callbacks (stable refs to avoid recreation)
   const handlePlayheadTimeUpdate = useCallback(
     (time: number) => noteColoringRef.current.markMissedNotes(time),
     []
@@ -67,16 +67,12 @@ export function Practice({ midi, onSelectDevice }: PracticeProps) {
       sessionRef.current.endSession()
     }
   }, [])
-  const handlePlayheadPageChange = useCallback(
-    (page: number) => setSheetMusicPage(page),
-    []
-  )
 
   // Playhead
   const playhead = usePlayhead(
     handlePlayheadTimeUpdate,
     handlePlayheadEnd,
-    handlePlayheadPageChange
+    setSheetMusicPage
   )
   const playheadRef = useRef(playhead)
   playheadRef.current = playhead
@@ -100,7 +96,7 @@ export function Practice({ midi, onSelectDevice }: PracticeProps) {
     }
   }, [session.lastNoteResult])
 
-  // Reset state when starting a new session
+  // Handle session state changes: reset on start, stop playhead on end
   useEffect(() => {
     if (session.isActive) {
       noteColoringRef.current.resetColors()
@@ -113,14 +109,14 @@ export function Practice({ midi, onSelectDevice }: PracticeProps) {
     }
   }, [session.isActive])
 
-  // Show results modal when session ends
+  // Show results modal when session ends with results
   useEffect(() => {
     if (session.results && !session.isActive) {
       setShowResults(true)
     }
   }, [session.results, session.isActive])
 
-  // Start playhead on first correct note
+  // Start playhead on first correct note; reset flag when session ends
   useEffect(() => {
     if (session.isActive && session.lastNoteResult && !playheadStartedRef.current) {
       if (session.lastNoteResult.result === "correct") {
@@ -133,7 +129,7 @@ export function Practice({ midi, onSelectDevice }: PracticeProps) {
     }
   }, [session.isActive, session.lastNoteResult, session.sessionState?.tempo])
 
-  // Submit MIDI notes to session
+  // Submit MIDI notes to session (uses ref to avoid session object in deps)
   useEffect(() => {
     if (!midi.lastNote || !midi.lastNote.on) return
     if (!sessionRef.current.isActive) return
@@ -160,7 +156,6 @@ export function Practice({ midi, onSelectDevice }: PracticeProps) {
   const handleStartPractice = useCallback(async () => {
     if (!piece?.xml) return
 
-    // Import piece and start session
     const importResult = await sessionRef.current.importPiece({
       id: piece.id,
       xml: piece.xml,
@@ -185,78 +180,83 @@ export function Practice({ midi, onSelectDevice }: PracticeProps) {
 
   // Go back to library
   const handleBack = useCallback(() => {
-    if (session.isActive) {
-      session.endSession()
+    if (sessionRef.current.isActive) {
+      sessionRef.current.endSession()
     }
     navigate("/")
-  }, [navigate, session])
+  }, [navigate])
 
-  // Dismiss results
-  const handleDismissResults = useCallback(() => {
-    setShowResults(false)
-  }, [])
+  // Refs for keyboard handler to avoid effect rerunning on every state change
+  const showResultsRef = useRef(showResults)
+  showResultsRef.current = showResults
+  const pageInfoRef = useRef(pageInfo)
+  pageInfoRef.current = pageInfo
+  const pieceRef = useRef(piece)
+  pieceRef.current = piece
+  const midiRef = useRef(midi)
+  midiRef.current = midi
+  const handleStartPracticeRef = useRef(handleStartPractice)
+  handleStartPracticeRef.current = handleStartPractice
 
-  // Retry with same settings
-  const handleRetry = useCallback(() => {
-    setShowResults(false)
-    handleStartPractice()
-  }, [handleStartPractice])
-
-  // Keyboard shortcuts
+  // Keyboard shortcuts (minimal deps using refs)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if typing in an input
+    function handleKeyDown(e: KeyboardEvent): void {
       if (e.target instanceof HTMLInputElement) return
 
+      const currentSession = sessionRef.current
+      const currentPageInfo = pageInfoRef.current
+      const currentPiece = pieceRef.current
+      const currentMidi = midiRef.current
+
       switch (e.key) {
-        case ' ': // Space: toggle start/stop practice
+        case ' ':
           e.preventDefault()
-          if (session.isActive) {
-            session.endSession()
-          } else if (!session.isLoading && piece?.xml && midi.isConnected) {
-            handleStartPractice()
+          if (currentSession.isActive) {
+            currentSession.endSession()
+          } else if (!currentSession.isLoading && currentPiece?.xml && currentMidi.isConnected) {
+            handleStartPracticeRef.current()
           }
           break
 
-        case 'Escape': // Escape: dismiss results or go back
+        case 'Escape':
           e.preventDefault()
-          if (showResults) {
+          if (showResultsRef.current) {
             setShowResults(false)
-          } else if (session.isActive) {
-            session.endSession()
+          } else if (currentSession.isActive) {
+            currentSession.endSession()
           } else {
             navigate("/")
           }
           break
 
         case 'r':
-        case 'R': // R: restart practice
+        case 'R':
           e.preventDefault()
-          if (session.isActive) {
-            session.endSession().then(() => handleStartPractice())
+          if (currentSession.isActive) {
+            currentSession.endSession().then(() => handleStartPracticeRef.current())
           } else {
-            handleStartPractice()
+            handleStartPracticeRef.current()
           }
           break
 
-        case 'ArrowLeft': // Left arrow: previous page (when not in session)
-          if (!session.isActive && pageInfo && pageInfo.currentPage > 1) {
+        case 'ArrowLeft':
+          if (!currentSession.isActive && currentPageInfo && currentPageInfo.currentPage > 1) {
             e.preventDefault()
-            pageInfo.setPage(pageInfo.currentPage - 1)
+            currentPageInfo.setPage(currentPageInfo.currentPage - 1)
           }
           break
 
-        case 'ArrowRight': // Right arrow: next page (when not in session)
-          if (!session.isActive && pageInfo && pageInfo.currentPage < pageInfo.pageCount) {
+        case 'ArrowRight':
+          if (!currentSession.isActive && currentPageInfo && currentPageInfo.currentPage < currentPageInfo.pageCount) {
             e.preventDefault()
-            pageInfo.setPage(pageInfo.currentPage + 1)
+            currentPageInfo.setPage(currentPageInfo.currentPage + 1)
           }
           break
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [session, handleStartPractice, showResults, navigate, piece?.xml, midi.isConnected, pageInfo])
+  }, [navigate])
 
   if (error) {
     return (
@@ -340,8 +340,11 @@ export function Practice({ midi, onSelectDevice }: PracticeProps) {
       {showResults && session.results && (
         <ResultsOverlay
           results={session.results}
-          onDismiss={handleDismissResults}
-          onRetry={handleRetry}
+          onDismiss={() => setShowResults(false)}
+          onRetry={() => {
+            setShowResults(false)
+            handleStartPractice()
+          }}
         />
       )}
 

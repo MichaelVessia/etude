@@ -1,5 +1,5 @@
 import { useVerovio, type NoteElementInfo, type ExtraNoteIndicator } from "../hooks/index.js"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useMemo } from "react"
 import { Playhead } from "./Playhead.js"
 import { ExtraNoteIndicators } from "./PlayedNoteIndicators.js"
 import type { PlayheadPosition } from "../hooks/usePlayhead.js"
@@ -35,8 +35,6 @@ export function SheetMusicView({
   noteSize,
 }: SheetMusicViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const noteElementsInitializedRef = useRef(false)
-  const lastMusicXmlRef = useRef<string | null>(null)
   const lastSvgRef = useRef<string | null>(null)
 
   const {
@@ -51,17 +49,14 @@ export function SheetMusicView({
     getMidiBase64,
     getNoteElements
   } = useVerovio({
-    scale: 50, // Larger scale for full-screen view
-    spacingBraceGroup: 18, // More space between staves for lyrics
-    lyricTopMinMargin: 3.0, // Push lyrics down from treble staff
+    scale: 50,
+    spacingBraceGroup: 18,
+    lyricTopMinMargin: 3.0,
   })
 
+  // Load MusicXML when it changes
   useEffect(() => {
     if (musicXml && isReady) {
-      if (musicXml !== lastMusicXmlRef.current) {
-        noteElementsInitializedRef.current = false
-        lastMusicXmlRef.current = musicXml
-      }
       loadMusicXml(musicXml)
     }
   }, [musicXml, isReady, loadMusicXml])
@@ -73,12 +68,18 @@ export function SheetMusicView({
     }
   }, [page, currentPage, pageCount, setPage])
 
+  // Create stable page info object for parent
+  const pageInfo = useMemo(
+    () => (pageCount > 0 ? { currentPage, pageCount, setPage } : null),
+    [currentPage, pageCount, setPage]
+  )
+
   // Expose page info to parent for keyboard navigation
   useEffect(() => {
-    if (onPageInfoReady && pageCount > 0) {
-      onPageInfoReady({ currentPage, pageCount, setPage })
+    if (onPageInfoReady && pageInfo) {
+      onPageInfoReady(pageInfo)
     }
-  }, [onPageInfoReady, currentPage, pageCount, setPage])
+  }, [onPageInfoReady, pageInfo])
 
   // Notify parent when MIDI is ready
   useEffect(() => {
@@ -88,23 +89,19 @@ export function SheetMusicView({
   }, [svg, onMidiReady, getMidiBase64])
 
   // Notify parent when note elements are ready for coloring
+  // Only fires when svg actually changes (new content rendered)
   useEffect(() => {
     if (!svg || !onNoteElementsReady) {
       return
     }
 
-    // Reset if svg changed (e.g., resize, page change)
-    if (svg !== lastSvgRef.current) {
-      noteElementsInitializedRef.current = false
-      lastSvgRef.current = svg
-    }
-
-    if (noteElementsInitializedRef.current) {
+    // Skip if svg hasn't changed
+    if (svg === lastSvgRef.current) {
       return
     }
+    lastSvgRef.current = svg
 
-    noteElementsInitializedRef.current = true
-
+    // Wait for DOM to update before querying elements
     const timer = setTimeout(() => {
       const noteElements = getNoteElements()
       const svgElement = containerRef.current?.querySelector("svg") ?? null

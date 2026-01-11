@@ -12,11 +12,11 @@ export function MidiDeviceSelector({ midi, onSelectDevice }: MidiDeviceSelectorP
   const [showDropdown, setShowDropdown] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (only active when dropdown is open)
   useEffect(() => {
     if (!showDropdown) return
 
-    const handleClickOutside = (e: MouseEvent) => {
+    function handleClickOutside(e: MouseEvent): void {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setShowDropdown(false)
       }
