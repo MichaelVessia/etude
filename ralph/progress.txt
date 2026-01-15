@@ -16,3 +16,33 @@
 **Story**: 2.2.0 - Update session routes to use catchTag
 **Status**: complete
 ---
+
+## Iteration 4 - 2026-01-15 00:29
+**Story**: 3.1.0 - Fix catchAll in piece RPC handler
+**Status**: complete
+---
+
+## Iteration 5 - 2026-01-15 00:30
+**Story**: 3.1.0 - Fix catchAll in piece RPC handler
+**Status**: complete
+---
+
+## Iteration 6 - 2026-01-15 00:31
+**Story**: 3.1.0 - Fix catchAll in piece RPC handler
+**Status**: complete
+---
+
+## Iteration 7 - 2026-01-15 00:33
+**Story**: 3.1.0 - Fix catchAll in piece RPC handler
+**Status**: complete
+---
+
+## Iteration 8 - 2026-01-15 00:34
+**Story**: 3.1.0 - Fix catchAll in piece RPC handler
+**Status**: complete
+---
+
+## Iteration 9 - 2026-01-15 00:36
+**Story**: 3.1.0 - Fix catchAll in piece RPC handler
+**Status**: complete
+---

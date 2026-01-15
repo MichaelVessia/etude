@@ -46,7 +46,8 @@ export const PieceRpcsLive = PieceRpcs.toLayer(
           const existing = yield* pieceRepo.getByFilePath(filePath)
           if (existing) {
             const notes = yield* pieceRepo.getNotes(existing.id).pipe(
-              Effect.catchAll(() => Effect.succeed([]))
+              Effect.catchTag("SqlError", () => Effect.succeed([])),
+              Effect.catchTag("PieceNotFound", () => Effect.succeed([]))
             )
             return new ImportPieceResult({
               id: existing.id,

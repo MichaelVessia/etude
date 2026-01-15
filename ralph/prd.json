@@ -139,7 +139,7 @@
         ],
         "pattern": "Effect.catchTag for specific error handling"
       },
-      "status": "pending",
+      "status": "complete",
       "estimated_complexity": "small"
     }
   ]
