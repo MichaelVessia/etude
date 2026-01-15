@@ -11,3 +11,8 @@
 **Story**: 2.1.0 - Update piece routes to use catchTag
 **Status**: complete
 ---
+
+## Iteration 3 - 2026-01-15 00:28
+**Story**: 2.2.0 - Update session routes to use catchTag
+**Status**: complete
+---

@@ -147,7 +147,7 @@ describe("Session Routes", () => {
       }).pipe(Effect.provide(TestServiceLayer))
     )
 
-    it.effect("returns 400 for non-existent piece", () =>
+    it.effect("returns 404 for non-existent piece", () =>
       Effect.gen(function* () {
         yield* setupTables
 
@@ -160,8 +160,8 @@ describe("Session Routes", () => {
         })
         const { response, json } = yield* runRequestJson(request)
 
-        expect(response.status).toBe(400)
-        expect(json.error).toBeDefined()
+        expect(response.status).toBe(404)
+        expect(json.error).toContain("Piece not found")
       }).pipe(Effect.provide(TestServiceLayer))
     )
 

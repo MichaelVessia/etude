@@ -44,8 +44,17 @@ const startSession = Effect.gen(function* () {
 
   return yield* HttpServerResponse.json(result)
 }).pipe(
-  Effect.catchAll((error) =>
-    HttpServerResponse.json({ error: String(error) }, { status: 400 })
+  Effect.catchTag("ParseError", (e) =>
+    HttpServerResponse.json({ error: String(e) }, { status: 400 })
+  ),
+  Effect.catchTag("PieceNotFound", (e) =>
+    HttpServerResponse.json({ error: `Piece not found: ${e.id}` }, { status: 404 })
+  ),
+  Effect.catchTag("SessionError", (e) =>
+    HttpServerResponse.json({ error: e.reason }, { status: 400 })
+  ),
+  Effect.catchTag("SqlError", () =>
+    HttpServerResponse.json({ error: "Database error" }, { status: 500 })
   )
 )
 
@@ -56,12 +65,16 @@ const endSession = Effect.gen(function* () {
   const result = yield* session.endSession()
   return yield* HttpServerResponse.json(result)
 }).pipe(
-  Effect.catchAll((error) =>
-    HttpServerResponse.json({ error: String(error) }, { status: 400 })
+  Effect.catchTag("SessionError", (e) =>
+    HttpServerResponse.json({ error: e.reason }, { status: 400 })
+  ),
+  Effect.catchTag("SqlError", () =>
+    HttpServerResponse.json({ error: "Database error" }, { status: 500 })
   )
 )
 
 // GET /state - Get current session state
+// Note: getState returns SessionState | null with no error channel
 const getState = Effect.gen(function* () {
   const session = yield* SessionService
   const state = yield* session.getState()
@@ -81,11 +94,7 @@ const getState = Effect.gen(function* () {
     hand: state.hand,
     tempo: state.tempo,
   })
-}).pipe(
-  Effect.catchAll((error) =>
-    HttpServerResponse.json({ error: String(error) }, { status: 400 })
-  )
-)
+})
 
 // POST /simulate - Submit a sequence of notes for testing
 // Notes should have pitch and timestamp (relative, first note at 0)
@@ -103,12 +112,16 @@ const simulateNotes = Effect.gen(function* () {
 
   return yield* HttpServerResponse.json({ submitted: results.length, results })
 }).pipe(
-  Effect.catchAll((error) =>
-    HttpServerResponse.json({ error: String(error) }, { status: 400 })
+  Effect.catchTag("ParseError", (e) =>
+    HttpServerResponse.json({ error: String(e) }, { status: 400 })
+  ),
+  Effect.catchTag("SessionError", (e) =>
+    HttpServerResponse.json({ error: e.reason }, { status: 400 })
   )
 )
 
 // GET /expected - Get expected notes for current session (for testing)
+// Note: getState returns SessionState | null with no error channel
 const getExpected = Effect.gen(function* () {
   const session = yield* SessionService
   const state = yield* session.getState()
@@ -124,11 +137,7 @@ const getExpected = Effect.gen(function* () {
       hand: n.hand,
     })),
   })
-}).pipe(
-  Effect.catchAll((error) =>
-    HttpServerResponse.json({ error: String(error) }, { status: 400 })
-  )
-)
+})
 
 export const sessionRoutes = HttpRouter.empty.pipe(
   HttpRouter.post("/start", startSession),
