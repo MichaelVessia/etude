@@ -90,7 +90,7 @@
         ],
         "pattern": "Effect.catchTag for discriminated error handling"
       },
-      "status": "pending",
+      "status": "complete",
       "estimated_complexity": "small"
     },
     {

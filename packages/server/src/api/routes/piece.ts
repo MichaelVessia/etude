@@ -51,8 +51,14 @@ const importPiece = Effect.gen(function* () {
     noteCount: parsedPiece.notes.length,
   })
 }).pipe(
-  Effect.catchAll((error) =>
-    HttpServerResponse.json({ error: String(error) }, { status: 400 })
+  Effect.catchTag("ParseError", (e) =>
+    HttpServerResponse.json(
+      { error: "reason" in e ? `${e.reason}: ${e.details}` : String(e) },
+      { status: 400 }
+    )
+  ),
+  Effect.catchTag("SqlError", () =>
+    HttpServerResponse.json({ error: "Database error" }, { status: 500 })
   )
 )
 
@@ -69,8 +75,8 @@ const listPieces = Effect.gen(function* () {
     }))
   )
 }).pipe(
-  Effect.catchAll((error) =>
-    HttpServerResponse.json({ error: String(error) }, { status: 400 })
+  Effect.catchTag("SqlError", () =>
+    HttpServerResponse.json({ error: "Database error" }, { status: 500 })
   )
 )
 

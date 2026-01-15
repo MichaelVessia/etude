@@ -6,3 +6,8 @@
 **Story**: 1.1.0 - Replace generic Error with DOStateError
 **Status**: complete
 ---
+
+## Iteration 2 - 2026-01-15 00:23
+**Story**: 2.1.0 - Update piece routes to use catchTag
+**Status**: complete
+---
