@@ -1,0 +1,146 @@
+{
+  "project": "etude",
+  "description": "Effect Best Practices Remediation - Fix catchAll, generic Error, and error handling patterns",
+  "version": "1.0.0",
+  "created_at": "2025-01-15",
+  "updated_at": "2025-01-15",
+  "specs_dir": "docs/specs/",
+  "available_specs": [
+    "effect-best-practices-remediation.md"
+  ],
+  "technology": {
+    "effect": {
+      "version": "^3.19.14",
+      "packages": [
+        "effect",
+        "@effect/platform",
+        "@effect/sql",
+        "@effect/sql-sqlite-bun"
+      ],
+      "notes": "Functional TypeScript framework. Use Schema.TaggedError for domain errors, catchTag for discriminated handling."
+    },
+    "bun": {
+      "version": "latest",
+      "packages": [
+        "bun",
+        "@types/bun"
+      ],
+      "notes": "Runtime and test runner. Tests use @codeforbreakfast/bun-test-effect for Effect integration."
+    },
+    "cloudflare": {
+      "version": "^4.20260103.0",
+      "packages": [
+        "@cloudflare/workers-types",
+        "wrangler"
+      ],
+      "notes": "Durable Objects for session state. session-do.ts is outside Effect runtime by design."
+    }
+  },
+  "reference_repos": {},
+  "testing_policy": {
+    "mandatory": "EVERY story MUST include tests. A story is NOT complete without passing tests.",
+    "verification": "bun test",
+    "no_exceptions": "Do NOT mark a story as complete if tests are missing or failing."
+  },
+  "stories": [
+    {
+      "id": "1.1.0",
+      "phase": "Phase 1: Tagged Errors",
+      "epic": "Session State Store",
+      "title": "Replace generic Error with DOStateError",
+      "description": "Create DOStateError tagged error and refactor session-state-store.ts to use it instead of generic Error class in Effect.tryPromise catch handlers.",
+      "specs": [
+        "effect-best-practices-remediation.md"
+      ],
+      "acceptance_criteria": [
+        "DOStateError extends Schema.TaggedError with operation (get|set|clear) and message fields",
+        "DOStateError defined in packages/server/src/services/session-state-store.ts or errors.ts",
+        "All 3 Effect.tryPromise catch handlers use DOStateError instead of new Error(...)",
+        "catchAll handlers remain (graceful degradation is intentional) but now catch DOStateError",
+        "bun test passes"
+      ],
+      "technical_details": {
+        "files": [
+          "packages/server/src/services/session-state-store.ts"
+        ],
+        "pattern": "Schema.TaggedError for domain-specific errors"
+      },
+      "status": "complete",
+      "estimated_complexity": "small"
+    },
+    {
+      "id": "2.1.0",
+      "phase": "Phase 2: HTTP Routes",
+      "epic": "Error Handling",
+      "title": "Update piece routes to use catchTag",
+      "description": "Replace blanket catchAll with specific catchTag handlers in routes/piece.ts for proper HTTP status codes per error type.",
+      "specs": [
+        "effect-best-practices-remediation.md"
+      ],
+      "acceptance_criteria": [
+        "importPiece route uses catchTag for ParseError (400), SqlError (500)",
+        "listPieces route uses catchTag for SqlError (500)",
+        "No blanket catchAll converting all errors to 400",
+        "Response bodies include error field with meaningful message",
+        "bun test passes"
+      ],
+      "technical_details": {
+        "files": [
+          "packages/server/src/api/routes/piece.ts"
+        ],
+        "pattern": "Effect.catchTag for discriminated error handling"
+      },
+      "status": "pending",
+      "estimated_complexity": "small"
+    },
+    {
+      "id": "2.2.0",
+      "phase": "Phase 2: HTTP Routes",
+      "epic": "Error Handling",
+      "title": "Update session routes to use catchTag",
+      "description": "Replace blanket catchAll with specific catchTag handlers in routes/session.ts. 5 endpoints need updating.",
+      "specs": [
+        "effect-best-practices-remediation.md"
+      ],
+      "acceptance_criteria": [
+        "All 5 session routes use catchTag instead of catchAll",
+        "PieceNotFound returns 404",
+        "SessionError returns 400 with reason field",
+        "SqlError returns 500",
+        "No blanket catchAll converting all errors to 400",
+        "bun test passes"
+      ],
+      "technical_details": {
+        "files": [
+          "packages/server/src/api/routes/session.ts"
+        ],
+        "pattern": "Effect.catchTag for discriminated error handling"
+      },
+      "status": "pending",
+      "estimated_complexity": "small"
+    },
+    {
+      "id": "3.1.0",
+      "phase": "Phase 3: RPC Handlers",
+      "epic": "Error Handling",
+      "title": "Fix catchAll in piece RPC handler",
+      "description": "Replace catchAll with catchTag in rpc/piece.ts:49 to only catch expected SqlError, not swallow all errors.",
+      "specs": [
+        "effect-best-practices-remediation.md"
+      ],
+      "acceptance_criteria": [
+        "pieceRepo.getNotes uses Effect.catchTag('SqlError', ...) instead of catchAll",
+        "Unexpected errors propagate correctly (not silently swallowed)",
+        "bun test passes"
+      ],
+      "technical_details": {
+        "files": [
+          "packages/server/src/rpc/piece.ts"
+        ],
+        "pattern": "Effect.catchTag for specific error handling"
+      },
+      "status": "pending",
+      "estimated_complexity": "small"
+    }
+  ]
+}

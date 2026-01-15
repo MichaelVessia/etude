@@ -1,6 +1,17 @@
-import { Effect, Layer, Ref, Context } from "effect"
+import { Effect, Layer, Ref, Context, Schema } from "effect"
 import type { SessionState } from "./session.js"
 import type { SerializedSessionState, DurableObjectStub } from "../session-do.js"
+
+/**
+ * Domain-specific error for Durable Object state operations.
+ */
+export class DOStateError extends Schema.TaggedError<DOStateError>()(
+  "DOStateError",
+  {
+    operation: Schema.Literal("get", "set", "clear"),
+    message: Schema.String,
+  }
+) {}
 
 /**
  * Abstract state store for session data.
@@ -62,7 +73,8 @@ export const makeDOSessionStateStore = (
         const data = (await response.json()) as { state: SerializedSessionState | null }
         return data.state ? deserialize(data.state) : null
       },
-      catch: (error) => new Error(`Failed to get session state: ${error}`),
+      catch: (error) =>
+        new DOStateError({ operation: "get", message: String(error) }),
     }).pipe(
       Effect.catchAll((error) =>
         Effect.gen(function* () {
@@ -81,7 +93,8 @@ export const makeDOSessionStateStore = (
           body: JSON.stringify({ state: serialize(state) }),
         })
       },
-      catch: (error) => new Error(`Failed to set session state: ${error}`),
+      catch: (error) =>
+        new DOStateError({ operation: "set", message: String(error) }),
     }).pipe(
       Effect.catchAll((error) =>
         Effect.logError(`Session state set failed: ${error.message}`)
@@ -93,7 +106,8 @@ export const makeDOSessionStateStore = (
       try: async () => {
         await stub.fetch("https://session/state", { method: "DELETE" })
       },
-      catch: (error) => new Error(`Failed to clear session state: ${error}`),
+      catch: (error) =>
+        new DOStateError({ operation: "clear", message: String(error) }),
     }).pipe(
       Effect.catchAll((error) =>
         Effect.logError(`Session state clear failed: ${error.message}`)
