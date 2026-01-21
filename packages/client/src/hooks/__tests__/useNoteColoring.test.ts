@@ -290,6 +290,134 @@ describe("useNoteColoring", () => {
     })
   })
 
+  describe("chord handling", () => {
+    it("colors all chord notes correctly when played in order", () => {
+      createMockNoteElement("note-c")
+      createMockNoteElement("note-e")
+      createMockNoteElement("note-g")
+
+      const { result } = renderHook(() => useNoteColoring())
+
+      // C major chord (all at same onset)
+      act(() => {
+        result.current.initializeNoteMap([
+          { elementId: "note-c", pitch: 60, onset: 0, duration: 500, page: 1 },
+          { elementId: "note-e", pitch: 64, onset: 0, duration: 500, page: 1 },
+          { elementId: "note-g", pitch: 67, onset: 0, duration: 500, page: 1 },
+        ])
+      })
+
+      // Play chord notes in order
+      act(() => {
+        result.current.processNoteResult({
+          pitch: 60,
+          result: "correct",
+          timingOffset: 10,
+          expectedNoteTime: 0,
+        })
+      })
+      expect(getNoteColor("note-c")).toBe("#16a34a") // green
+
+      act(() => {
+        result.current.processNoteResult({
+          pitch: 64,
+          result: "correct",
+          timingOffset: 15,
+          expectedNoteTime: 0,
+        })
+      })
+      expect(getNoteColor("note-e")).toBe("#16a34a")
+
+      act(() => {
+        result.current.processNoteResult({
+          pitch: 67,
+          result: "correct",
+          timingOffset: 20,
+          expectedNoteTime: 0,
+        })
+      })
+      expect(getNoteColor("note-g")).toBe("#16a34a")
+    })
+
+    it("colors chord notes correctly when played out of order", () => {
+      createMockNoteElement("note-c")
+      createMockNoteElement("note-e")
+      createMockNoteElement("note-g")
+
+      const { result } = renderHook(() => useNoteColoring())
+
+      act(() => {
+        result.current.initializeNoteMap([
+          { elementId: "note-c", pitch: 60, onset: 0, duration: 500, page: 1 },
+          { elementId: "note-e", pitch: 64, onset: 0, duration: 500, page: 1 },
+          { elementId: "note-g", pitch: 67, onset: 0, duration: 500, page: 1 },
+        ])
+      })
+
+      // Play out of order: G, C, E
+      act(() => {
+        result.current.processNoteResult({
+          pitch: 67,
+          result: "correct",
+          timingOffset: 10,
+          expectedNoteTime: 0,
+        })
+        result.current.processNoteResult({
+          pitch: 60,
+          result: "correct",
+          timingOffset: 15,
+          expectedNoteTime: 0,
+        })
+        result.current.processNoteResult({
+          pitch: 64,
+          result: "correct",
+          timingOffset: 20,
+          expectedNoteTime: 0,
+        })
+      })
+
+      expect(getNoteColor("note-c")).toBe("#16a34a")
+      expect(getNoteColor("note-e")).toBe("#16a34a")
+      expect(getNoteColor("note-g")).toBe("#16a34a")
+    })
+
+    it("colors only played notes in partial chord", () => {
+      createMockNoteElement("note-c")
+      createMockNoteElement("note-e")
+      createMockNoteElement("note-g")
+
+      const { result } = renderHook(() => useNoteColoring())
+
+      act(() => {
+        result.current.initializeNoteMap([
+          { elementId: "note-c", pitch: 60, onset: 0, duration: 500, page: 1 },
+          { elementId: "note-e", pitch: 64, onset: 0, duration: 500, page: 1 },
+          { elementId: "note-g", pitch: 67, onset: 0, duration: 500, page: 1 },
+        ])
+      })
+
+      // Play only C and G (miss E)
+      act(() => {
+        result.current.processNoteResult({
+          pitch: 60,
+          result: "correct",
+          timingOffset: 10,
+          expectedNoteTime: 0,
+        })
+        result.current.processNoteResult({
+          pitch: 67,
+          result: "correct",
+          timingOffset: 20,
+          expectedNoteTime: 0,
+        })
+      })
+
+      expect(getNoteColor("note-c")).toBe("#16a34a")
+      expect(getNoteColor("note-e")).toBeNull() // Still pending
+      expect(getNoteColor("note-g")).toBe("#16a34a")
+    })
+  })
+
   describe("markMissedNotes", () => {
     it("marks pending notes as missed when time passes", () => {
       createMockNoteElement("note1")

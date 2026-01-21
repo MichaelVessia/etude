@@ -136,7 +136,7 @@
         ],
         "pattern": "Edge case coverage for scoring correctness"
       },
-      "status": "pending",
+      "status": "complete",
       "estimated_complexity": "medium"
     },
     {

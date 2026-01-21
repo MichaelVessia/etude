@@ -413,4 +413,244 @@ describe("ComparisonService", () => {
       }).pipe(Effect.provide(ComparisonServiceLive))
     )
   })
+
+  describe("chord handling", () => {
+    it.effect("scores all notes correct when chord played in order", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        // C major chord (C, E, G)
+        const expected = [
+          note(60, 0), // C4
+          note(64, 0), // E4
+          note(67, 0), // G4
+        ]
+
+        // Play in order: C, E, G with small timing offsets
+        const playedNotes = [
+          played(60, 10),
+          played(64, 15),
+          played(67, 20),
+        ]
+
+        const result = yield* service.compare(expected, playedNotes, "both")
+
+        expect(result.noteAccuracy).toBe(1)
+        expect(result.missedNotes.length).toBe(0)
+        // All 3 notes should be correct
+        const correctCount = result.matchResults.filter(
+          (r) => r.result === "correct"
+        ).length
+        expect(correctCount).toBe(3)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("scores all notes correct when chord played out of order", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        // C major chord
+        const expected = [
+          note(60, 0), // C4
+          note(64, 0), // E4
+          note(67, 0), // G4
+        ]
+
+        // Play out of order: E, C, G
+        const playedNotes = [
+          played(64, 10), // E first
+          played(60, 15), // C second
+          played(67, 20), // G third
+        ]
+
+        const result = yield* service.compare(expected, playedNotes, "both")
+
+        expect(result.noteAccuracy).toBe(1)
+        expect(result.missedNotes.length).toBe(0)
+        const correctCount = result.matchResults.filter(
+          (r) => r.result === "correct"
+        ).length
+        expect(correctCount).toBe(3)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("marks only the missed note as wrong in partial chord", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        // C major chord
+        const expected = [
+          note(60, 0), // C4
+          note(64, 0), // E4
+          note(67, 0), // G4
+        ]
+
+        // Play only C and G (miss E)
+        const playedNotes = [
+          played(60, 10),
+          played(67, 20),
+        ]
+
+        const result = yield* service.compare(expected, playedNotes, "both")
+
+        expect(result.noteAccuracy).toBeCloseTo(2 / 3, 2) // 2 out of 3
+        expect(result.missedNotes.length).toBe(1)
+        expect(result.missedNotes[0]!.pitch).toBe(64) // E was missed
+        const correctCount = result.matchResults.filter(
+          (r) => r.result === "correct"
+        ).length
+        expect(correctCount).toBe(2)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("handles chord with one wrong note", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        // C major chord
+        const expected = [
+          note(60, 0), // C4
+          note(64, 0), // E4
+          note(67, 0), // G4
+        ]
+
+        // Play C, F (wrong), G
+        const playedNotes = [
+          played(60, 10),
+          played(65, 15), // F instead of E
+          played(67, 20),
+        ]
+
+        const result = yield* service.compare(expected, playedNotes, "both")
+
+        // C and G correct, F is wrong (doesn't match any expected)
+        // E (64) is missed since we played F (65) instead
+        expect(result.missedNotes.length).toBe(1)
+        expect(result.missedNotes[0]!.pitch).toBe(64)
+        const correctCount = result.matchResults.filter(
+          (r) => r.result === "correct"
+        ).length
+        expect(correctCount).toBe(2)
+        const wrongCount = result.matchResults.filter(
+          (r) => r.result === "wrong"
+        ).length
+        expect(wrongCount).toBe(1)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+  })
+
+  describe("edge cases", () => {
+    it.effect("handles rapid repeated notes", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        // Three rapid C4s at 0ms, 100ms, 200ms
+        const expected = [
+          note(60, 0),
+          note(60, 100),
+          note(60, 200),
+        ]
+
+        // Play three C4s rapidly
+        const playedNotes = [
+          played(60, 20),
+          played(60, 110),
+          played(60, 190),
+        ]
+
+        const result = yield* service.compare(expected, playedNotes, "both")
+
+        expect(result.noteAccuracy).toBe(1)
+        expect(result.missedNotes.length).toBe(0)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("handles notes arriving out of timestamp order", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        // Sequential notes
+        const expected = [
+          note(60, 0),
+          note(62, 500),
+          note(64, 1000),
+        ]
+
+        // Notes arrive in different order due to timing
+        // (e.g., WebSocket message ordering)
+        const playedNotes = [
+          played(62, 520), // Second note plays first
+          played(60, 30),  // First note plays second
+          played(64, 1010),
+        ]
+
+        const result = yield* service.compare(expected, playedNotes, "both")
+
+        // Should still match correctly based on closest timing distance
+        expect(result.noteAccuracy).toBe(1)
+        expect(result.missedNotes.length).toBe(0)
+
+        // Verify each note matched to correct expected note
+        expect(result.matchResults[0]!.expectedNote?.pitch).toBe(62)
+        expect(result.matchResults[1]!.expectedNote?.pitch).toBe(60)
+        expect(result.matchResults[2]!.expectedNote?.pitch).toBe(64)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("handles empty measure (no expected notes)", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        // No expected notes
+        const expected: NoteEvent[] = []
+
+        // User plays a note anyway
+        const playedNotes = [played(60, 100)]
+
+        const result = yield* service.compare(expected, playedNotes, "both")
+
+        // Should be extra, accuracy is 0/0 = 0
+        expect(result.noteAccuracy).toBe(0)
+        expect(result.extraNotes).toBe(1)
+        expect(result.missedNotes.length).toBe(0)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("handles playing nothing when notes expected", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        const expected = [note(60, 0), note(62, 500)]
+
+        // User plays nothing
+        const playedNotes: PlayedNote[] = []
+
+        const result = yield* service.compare(expected, playedNotes, "both")
+
+        expect(result.noteAccuracy).toBe(0)
+        expect(result.missedNotes.length).toBe(2)
+        expect(result.matchResults.length).toBe(0)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("handles very late notes beyond tolerance as wrong", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        const expected = [note(60, 0)]
+
+        // Play 500ms late (way outside 150ms tolerance)
+        const playedNotes = [played(60, 500)]
+
+        const result = yield* service.compare(expected, playedNotes, "both")
+
+        // Note matches by pitch but is wrong due to timing
+        const wrongCount = result.matchResults.filter(
+          (r) => r.result === "wrong"
+        ).length
+        expect(wrongCount).toBe(1)
+        expect(result.matchResults[0]!.timingOffset).toBe(500)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+  })
 })

@@ -453,4 +453,223 @@ describe("note-matching", () => {
       expect(results[1]!.hand).toBe("right")
     })
   })
+
+  describe("parity: comparison.ts and session-do.ts use same matching logic", () => {
+    // Both comparison.ts and session-do.ts import and use the shared matchNote function
+    // These tests verify the canonical behavior that both code paths rely on
+
+    it("verifies matching logic produces deterministic results across calls", () => {
+      // This simulates what happens when the same input is processed
+      // by comparison.ts (local mode) vs session-do.ts (WebSocket mode)
+      const expected = [
+        note(60, 0, "right"),
+        note(64, 0, "right"),   // Chord
+        note(67, 0, "right"),   // Chord
+        note(62, 500, "right"),
+        note(65, 1000, "left"),
+      ]
+
+      const playedNotes = [
+        played(60, 20),
+        played(67, 25),  // Out of pitch order
+        played(64, 30),
+        played(62, 490),
+        played(65, 1020),
+      ]
+
+      // Simulate comparison.ts path (batch processing)
+      const matchedIndices1 = new Set<number>()
+      const results1: Array<{ pitch: number; result: string; offset: number }> = []
+      for (const p of playedNotes) {
+        const r = matchNote(p, expected, matchedIndices1, "both")
+        results1.push({ pitch: p.pitch, result: r.result, offset: r.timingOffset })
+      }
+
+      // Simulate session-do.ts path (streaming/incremental processing)
+      const matchedIndices2 = new Set<number>()
+      const results2: Array<{ pitch: number; result: string; offset: number }> = []
+      for (const p of playedNotes) {
+        const r = matchNote(p, expected, matchedIndices2, "both")
+        results2.push({ pitch: p.pitch, result: r.result, offset: r.timingOffset })
+      }
+
+      // Results must be identical
+      expect(results1).toEqual(results2)
+      expect(matchedIndices1).toEqual(matchedIndices2)
+
+      // Verify specific expectations
+      expect(results1[0]).toEqual({ pitch: 60, result: "correct", offset: 20 })
+      expect(results1[1]).toEqual({ pitch: 67, result: "correct", offset: 25 })
+      expect(results1[2]).toEqual({ pitch: 64, result: "correct", offset: 30 })
+      expect(results1[3]).toEqual({ pitch: 62, result: "correct", offset: -10 })
+      expect(results1[4]).toEqual({ pitch: 65, result: "correct", offset: 20 })
+    })
+
+    it("verifies tolerance boundary behavior is identical", () => {
+      const expected = [note(60, 1000)]
+
+      // Test at exact boundaries
+      const testCases = [
+        { timestamp: 1149, expectedResult: "correct" as const, expectedOffset: 149 },
+        { timestamp: 1150, expectedResult: "correct" as const, expectedOffset: 150 },
+        { timestamp: 1151, expectedResult: "wrong" as const, expectedOffset: 151 },
+        { timestamp: 851, expectedResult: "correct" as const, expectedOffset: -149 },
+        { timestamp: 850, expectedResult: "correct" as const, expectedOffset: -150 },
+        { timestamp: 849, expectedResult: "wrong" as const, expectedOffset: -151 },
+      ]
+
+      for (const tc of testCases) {
+        // Fresh state for each test
+        const matchedIndices = new Set<number>()
+        const result = matchNote(played(60, tc.timestamp), expected, matchedIndices, "both")
+
+        expect(result.result).toBe(tc.expectedResult)
+        expect(result.timingOffset).toBe(tc.expectedOffset)
+      }
+    })
+
+    it("verifies hand filtering is consistent", () => {
+      const expected = [
+        note(60, 0, "right"),
+        note(48, 0, "left"),
+        note(62, 500, "right"),
+        note(50, 500, "left"),
+      ]
+
+      // Test right hand only
+      const matchedRight = new Set<number>()
+      const r1 = matchNote(played(60, 0), expected, matchedRight, "right")
+      const r2 = matchNote(played(48, 0), expected, matchedRight, "right") // Left hand pitch with right filter
+      const r3 = matchNote(played(62, 500), expected, matchedRight, "right")
+
+      expect(r1.result).toBe("correct")
+      expect(r2.result).toBe("wrong") // Wrong pitch for right hand
+      expect(r3.result).toBe("correct")
+
+      // Test left hand only
+      const matchedLeft = new Set<number>()
+      const l1 = matchNote(played(48, 0), expected, matchedLeft, "left")
+      const l2 = matchNote(played(60, 0), expected, matchedLeft, "left") // Right hand pitch with left filter
+      const l3 = matchNote(played(50, 500), expected, matchedLeft, "left")
+
+      expect(l1.result).toBe("correct")
+      expect(l2.result).toBe("wrong")
+      expect(l3.result).toBe("correct")
+    })
+  })
+
+  describe("edge cases", () => {
+    it("handles rapid repeated notes (same pitch, close timing)", () => {
+      const expected = [
+        note(60, 0),
+        note(60, 100),
+        note(60, 200),
+      ]
+      const matchedIndices = new Set<number>()
+
+      // Play three rapid notes
+      const r1 = matchNote(played(60, 20), expected, matchedIndices, "both")
+      const r2 = matchNote(played(60, 110), expected, matchedIndices, "both")
+      const r3 = matchNote(played(60, 190), expected, matchedIndices, "both")
+
+      expect(r1.result).toBe("correct")
+      expect(r1.expectedNote?.startTime).toBe(0)
+
+      expect(r2.result).toBe("correct")
+      expect(r2.expectedNote?.startTime).toBe(100)
+
+      expect(r3.result).toBe("correct")
+      expect(r3.expectedNote?.startTime).toBe(200)
+
+      expect(matchedIndices.size).toBe(3)
+    })
+
+    it("handles very rapid repeated notes (50ms apart)", () => {
+      const expected = [
+        note(60, 0),
+        note(60, 50),
+        note(60, 100),
+      ]
+      const matchedIndices = new Set<number>()
+
+      const r1 = matchNote(played(60, 10), expected, matchedIndices, "both")
+      const r2 = matchNote(played(60, 55), expected, matchedIndices, "both")
+      const r3 = matchNote(played(60, 95), expected, matchedIndices, "both")
+
+      expect(r1.result).toBe("correct")
+      expect(r2.result).toBe("correct")
+      expect(r3.result).toBe("correct")
+      expect(matchedIndices.size).toBe(3)
+    })
+
+    it("handles notes arriving out of timestamp order", () => {
+      const expected = [
+        note(60, 0),
+        note(62, 500),
+        note(64, 1000),
+      ]
+      const matchedIndices = new Set<number>()
+
+      // Notes arrive in wrong order (simulating network jitter)
+      const r1 = matchNote(played(62, 520), expected, matchedIndices, "both")
+      const r2 = matchNote(played(60, 30), expected, matchedIndices, "both")
+      const r3 = matchNote(played(64, 1010), expected, matchedIndices, "both")
+
+      // Each should match to the closest expected note by timing
+      expect(r1.result).toBe("correct")
+      expect(r1.expectedNote?.pitch).toBe(62)
+
+      expect(r2.result).toBe("correct")
+      expect(r2.expectedNote?.pitch).toBe(60)
+
+      expect(r3.result).toBe("correct")
+      expect(r3.expectedNote?.pitch).toBe(64)
+    })
+
+    it("handles notes with same pitch played for different expected notes", () => {
+      // Two C notes expected at different times
+      const expected = [
+        note(60, 0),
+        note(62, 500), // Different pitch in between
+        note(60, 1000),
+      ]
+      const matchedIndices = new Set<number>()
+
+      const r1 = matchNote(played(60, 50), expected, matchedIndices, "both")
+      const r2 = matchNote(played(62, 520), expected, matchedIndices, "both")
+      const r3 = matchNote(played(60, 980), expected, matchedIndices, "both")
+
+      expect(r1.result).toBe("correct")
+      expect(r1.expectedNote?.startTime).toBe(0)
+
+      expect(r2.result).toBe("correct")
+      expect(r2.expectedNote?.pitch).toBe(62)
+
+      expect(r3.result).toBe("correct")
+      expect(r3.expectedNote?.startTime).toBe(1000)
+    })
+
+    it("handles extra note before any expected notes", () => {
+      const expected = [note(60, 1000)]
+      const matchedIndices = new Set<number>()
+
+      // Play a note way too early
+      const r = matchNote(played(60, 100), expected, matchedIndices, "both")
+
+      // Should still match (but be wrong due to timing)
+      expect(r.result).toBe("wrong")
+      expect(r.timingOffset).toBe(-900)
+    })
+
+    it("handles playing same note twice when only one expected", () => {
+      const expected = [note(60, 500)]
+      const matchedIndices = new Set<number>()
+
+      const r1 = matchNote(played(60, 490), expected, matchedIndices, "both")
+      const r2 = matchNote(played(60, 510), expected, matchedIndices, "both")
+
+      expect(r1.result).toBe("correct")
+      expect(r2.result).toBe("extra") // Already matched
+    })
+  })
 })

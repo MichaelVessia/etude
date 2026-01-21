@@ -56,3 +56,8 @@
 **Story**: 1.2.0 - Consolidate duplicate note matching logic
 **Status**: complete
 ---
+
+## Iteration 3 - 2026-01-20 23:32
+**Story**: 1.3.0 - Add critical test coverage for scoring behavior
+**Status**: complete
+---
