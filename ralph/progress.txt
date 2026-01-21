@@ -76,3 +76,13 @@
 **Story**: 2.3.0 - Fix playhead tempo alignment for missed note detection
 **Status**: complete
 ---
+
+## Iteration 7 - 2026-01-20 23:50
+**Story**: 3.1.0 - Fix voice/backup handling in MusicXML parser
+**Status**: complete
+---
+
+## Iteration 8 - 2026-01-20 23:52
+**Story**: 3.1.0 - Fix voice/backup handling in MusicXML parser
+**Status**: complete
+---

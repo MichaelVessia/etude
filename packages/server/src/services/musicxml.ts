@@ -57,23 +57,75 @@ function divisionsToMs(
   return (divisions / divisionsPerQuarter) * msPerQuarter
 }
 
+/**
+ * Ordered element from preserveOrder parse mode.
+ * Each element is an object with a single key (the tag name)
+ * and value that is an array of children (also OrderedElements).
+ * Text content appears as { "#text": value }.
+ * Attributes appear as { ":@": { "@_attr": value } }.
+ */
+type OrderedElement = {
+  [tagName: string]: OrderedElement[]
+} & {
+  ":@"?: Record<string, unknown>
+  "#text"?: string | number
+}
+
+/** Get the tag name from an ordered element */
+function getTagName(el: OrderedElement): string | null {
+  for (const key of Object.keys(el)) {
+    if (key !== ":@" && key !== "#text") return key
+  }
+  return null
+}
+
+/** Find first child with given tag name */
+function findChild(children: OrderedElement[], tagName: string): OrderedElement | undefined {
+  return children.find((c) => tagName in c)
+}
+
+/** Find all children with given tag name */
+function findChildren(children: OrderedElement[], tagName: string): OrderedElement[] {
+  return children.filter((c) => tagName in c)
+}
+
+/** Get text content from an element's children */
+function getTextContent(children: OrderedElement[]): string | number | undefined {
+  const textEl = children.find((c) => "#text" in c)
+  return textEl?.["#text"]
+}
+
+/** Get a simple value from a child element */
+function getChildValue(children: OrderedElement[], tagName: string): string | number | undefined {
+  const child = findChild(children, tagName)
+  if (!child) return undefined
+  return getTextContent(child[tagName] as OrderedElement[])
+}
+
+/** Get attribute from ordered element */
+function getAttribute(el: OrderedElement, attrName: string): string | undefined {
+  const attrs = el[":@"]
+  if (attrs) {
+    return attrs[`@_${attrName}`] as string | undefined
+  }
+  return undefined
+}
+
 export const MusicXmlServiceLive = Layer.succeed(
   MusicXmlService,
   MusicXmlService.of({
     parse: (xml: string, filePath: string) =>
       Effect.gen(function* () {
+        // Use preserveOrder to maintain document order of elements
         const parser = new XMLParser({
           ignoreAttributes: false,
           attributeNamePrefix: "@_",
-          isArray: (name) =>
-            ["part", "measure", "note", "attributes", "direction"].includes(
-              name
-            ),
+          preserveOrder: true,
         })
 
-        let parsed: unknown
+        let parsed: OrderedElement[]
         try {
-          parsed = parser.parse(xml)
+          parsed = parser.parse(xml) as OrderedElement[]
         } catch (e) {
           return yield* new ParseError({
             reason: "MalformedXml",
@@ -82,11 +134,8 @@ export const MusicXmlServiceLive = Layer.succeed(
           })
         }
 
-        const root = parsed as Record<string, unknown>
-        const scorePartwise = root["score-partwise"] as
-          | Record<string, unknown>
-          | undefined
-
+        // Find score-partwise element
+        const scorePartwise = findChild(parsed, "score-partwise")
         if (!scorePartwise) {
           return yield* new ParseError({
             reason: "MalformedXml",
@@ -95,35 +144,38 @@ export const MusicXmlServiceLive = Layer.succeed(
           })
         }
 
+        const scoreChildren = scorePartwise["score-partwise"] as OrderedElement[]
+
         // Extract metadata
-        const work = scorePartwise["work"] as Record<string, unknown> | undefined
-        const identification = scorePartwise["identification"] as
-          | Record<string, unknown>
-          | undefined
+        const workEl = findChild(scoreChildren, "work")
+        const identificationEl = findChild(scoreChildren, "identification")
 
-        const name =
-          (work?.["work-title"] as string) ||
-          filePath.split("/").pop()?.replace(".xml", "") ||
-          "Unknown"
-
-        let composer: string | null = null
-        if (identification?.["creator"]) {
-          const creator = identification["creator"]
-          if (typeof creator === "string") {
-            composer = creator
-          } else if (
-            typeof creator === "object" &&
-            creator !== null &&
-            "#text" in creator
-          ) {
-            composer = (creator as { "#text": string })["#text"]
+        let name =
+          filePath.split("/").pop()?.replace(".xml", "") || "Unknown"
+        if (workEl) {
+          const workChildren = workEl["work"] as OrderedElement[]
+          const workTitle = getChildValue(workChildren, "work-title")
+          if (workTitle) {
+            name = String(workTitle)
           }
         }
 
-        // Find piano part(s)
-        const parts = scorePartwise["part"] as unknown[] | undefined
+        let composer: string | null = null
+        if (identificationEl) {
+          const idChildren = identificationEl["identification"] as OrderedElement[]
+          const creatorEl = findChild(idChildren, "creator")
+          if (creatorEl) {
+            const creatorChildren = creatorEl["creator"] as OrderedElement[]
+            const creatorText = getTextContent(creatorChildren)
+            if (creatorText) {
+              composer = String(creatorText)
+            }
+          }
+        }
 
-        if (!parts || parts.length === 0) {
+        // Find parts
+        const parts = findChildren(scoreChildren, "part")
+        if (parts.length === 0) {
           return yield* new ParseError({
             reason: "EmptyPiece",
             details: "No parts found in score",
@@ -131,12 +183,11 @@ export const MusicXmlServiceLive = Layer.succeed(
           })
         }
 
-        // For now, use the first part (typically the piano)
-        // In a more robust implementation, we'd filter by instrument
-        const part = parts[0] as Record<string, unknown>
-        const measures = part["measure"] as unknown[]
+        // Process the first part
+        const partChildren = parts[0]!["part"] as OrderedElement[]
+        const measures = findChildren(partChildren, "measure")
 
-        if (!measures || measures.length === 0) {
+        if (measures.length === 0) {
           return yield* new ParseError({
             reason: "EmptyPiece",
             details: "No measures found in part",
@@ -145,187 +196,162 @@ export const MusicXmlServiceLive = Layer.succeed(
         }
 
         const notes: NoteEvent[] = []
-        let currentTime = 0 // in divisions
+        let cursor = 0 // Current time position in divisions
         let divisionsPerQuarter = 1
         let tempo = 120 // default BPM
-        let currentMeasure = 0
+        let lastMeasureNumber = 0
 
-        for (const measureObj of measures) {
-          const measure = measureObj as Record<string, unknown>
+        for (const measureEl of measures) {
+          const measureChildren = measureEl["measure"] as OrderedElement[]
           const measureNumber = parseInt(
-            (measure["@_number"] as string) || String(currentMeasure + 1),
+            getAttribute(measureEl, "number") || String(lastMeasureNumber + 1),
             10
           )
-          currentMeasure = measureNumber
+          lastMeasureNumber = measureNumber
 
-          // Check for attributes (time signature, divisions)
-          const attributes = measure["attributes"] as unknown[] | undefined
-          if (attributes) {
-            for (const attr of attributes) {
-              const a = attr as Record<string, unknown>
-              if (a["divisions"]) {
-                divisionsPerQuarter = Number(a["divisions"])
-              }
-            }
-          }
+          // Process each child element in document order
+          for (const child of measureChildren) {
+            const tagName = getTagName(child)
+            if (!tagName) continue
 
-          // Check for tempo in direction (sound element or metronome)
-          const directions = measure["direction"] as unknown[] | undefined
-          if (directions) {
-            for (const dir of directions) {
-              const d = dir as Record<string, unknown>
-              // Check sound element for tempo attribute
-              const sound = d["sound"] as Record<string, unknown> | undefined
-              if (sound?.["@_tempo"]) {
-                tempo = Number(sound["@_tempo"])
-              }
-              // Check metronome element for per-minute
-              const dirType = d["direction-type"] as Record<string, unknown> | undefined
-              const metronome = dirType?.["metronome"] as Record<string, unknown> | undefined
-              if (metronome?.["per-minute"]) {
-                tempo = Number(metronome["per-minute"])
-              }
-            }
-          }
-
-          // Process notes, backup, and forward elements in order
-          // We need to iterate through all measure children to handle them in sequence
-          const measureNotes = measure["note"] as unknown[] | undefined
-          const backups = measure["backup"] as unknown[] | Record<string, unknown> | undefined
-          const forwards = measure["forward"] as unknown[] | Record<string, unknown> | undefined
-
-          // Normalize backups and forwards to arrays
-          const backupList = backups
-            ? Array.isArray(backups)
-              ? backups
-              : [backups]
-            : []
-          const forwardList = forwards
-            ? Array.isArray(forwards)
-              ? forwards
-              : [forwards]
-            : []
-
-          // Process notes first, then handle backup/forward
-          // Note: In a proper implementation, we'd process XML children in order
-          // For now, we'll handle the common pattern: notes, then backup, then more notes
-          if (measureNotes) {
-            let backupIndex = 0
-
-            for (let i = 0; i < measureNotes.length; i++) {
-              const note = measureNotes[i] as Record<string, unknown>
-
-              // Skip rests
-              if ("rest" in note) {
-                const duration = Number(note["duration"] || 0)
-                // Check if this note is part of a chord
-                if (!("chord" in note)) {
-                  currentTime += duration
+            switch (tagName) {
+              case "attributes": {
+                const attrChildren = child["attributes"] as OrderedElement[]
+                const divValue = getChildValue(attrChildren, "divisions")
+                if (divValue !== undefined) {
+                  divisionsPerQuarter = Number(divValue)
                 }
-                continue
+                break
               }
 
-              // Skip grace notes for scoring purposes
-              if ("grace" in note) {
-                continue
+              case "direction": {
+                const dirChildren = child["direction"] as OrderedElement[]
+                // Check for sound element with tempo
+                const soundEl = findChild(dirChildren, "sound")
+                if (soundEl) {
+                  const soundTempo = getAttribute(soundEl, "tempo")
+                  if (soundTempo) {
+                    tempo = Number(soundTempo)
+                  }
+                }
+                // Check for metronome in direction-type
+                const dirTypeEl = findChild(dirChildren, "direction-type")
+                if (dirTypeEl) {
+                  const dirTypeChildren = dirTypeEl["direction-type"] as OrderedElement[]
+                  const metronomeEl = findChild(dirTypeChildren, "metronome")
+                  if (metronomeEl) {
+                    const metChildren = metronomeEl["metronome"] as OrderedElement[]
+                    const perMinute = getChildValue(metChildren, "per-minute")
+                    if (perMinute !== undefined) {
+                      tempo = Number(perMinute)
+                    }
+                  }
+                }
+                break
               }
 
-              const pitch = note["pitch"] as Record<string, unknown> | undefined
-              if (!pitch) continue
+              case "backup": {
+                const backupChildren = child["backup"] as OrderedElement[]
+                const duration = Number(getChildValue(backupChildren, "duration") || 0)
+                cursor -= duration
+                break
+              }
 
-              const step = (pitch["step"] as string) || "C"
-              const octave = Number(pitch["octave"] || 4)
-              const alter = Number(pitch["alter"] || 0)
-              const duration = Number(note["duration"] || 0)
+              case "forward": {
+                const forwardChildren = child["forward"] as OrderedElement[]
+                const duration = Number(getChildValue(forwardChildren, "duration") || 0)
+                cursor += duration
+                break
+              }
 
-              // Determine hand from staff number (1 = treble/right, 2 = bass/left)
-              const staff = Number(note["staff"] || 1)
-              const hand = staff === 2 ? "left" : "right"
+              case "note": {
+                const noteChildren = child["note"] as OrderedElement[]
 
-              // Get voice if available
-              const voice = note["voice"]
-                ? Option.some(Number(note["voice"]))
-                : Option.none()
+                // Skip rests
+                if (findChild(noteChildren, "rest")) {
+                  // Advance cursor only if not a chord
+                  if (!findChild(noteChildren, "chord")) {
+                    const duration = Number(getChildValue(noteChildren, "duration") || 0)
+                    cursor += duration
+                  }
+                  continue
+                }
 
-              // Handle tied notes - only count the first note of a tie
-              const tieElements = note["tie"] as
-                | unknown[]
-                | Record<string, unknown>
-                | undefined
-              let isTiedContinuation = false
-              if (tieElements) {
-                const ties = Array.isArray(tieElements)
-                  ? tieElements
-                  : [tieElements]
-                for (const tie of ties) {
-                  const t = tie as Record<string, unknown>
-                  if (t["@_type"] === "stop") {
+                // Skip grace notes for scoring purposes
+                if (findChild(noteChildren, "grace")) {
+                  continue
+                }
+
+                const pitchEl = findChild(noteChildren, "pitch")
+                if (!pitchEl) continue
+
+                const pitchChildren = pitchEl["pitch"] as OrderedElement[]
+                const step = String(getChildValue(pitchChildren, "step") || "C")
+                const octave = Number(getChildValue(pitchChildren, "octave") || 4)
+                const alter = Number(getChildValue(pitchChildren, "alter") || 0)
+                const duration = Number(getChildValue(noteChildren, "duration") || 0)
+
+                // Determine hand from staff number (1 = treble/right, 2 = bass/left)
+                const staffValue = getChildValue(noteChildren, "staff")
+                const staff = staffValue !== undefined ? Number(staffValue) : 1
+                const hand = staff === 2 ? "left" : "right"
+
+                // Get voice if available
+                const voiceValue = getChildValue(noteChildren, "voice")
+                const voice = voiceValue !== undefined
+                  ? Option.some(Number(voiceValue))
+                  : Option.none()
+
+                // Handle tied notes - only count the first note of a tie
+                const tieElements = findChildren(noteChildren, "tie")
+                let isTiedContinuation = false
+                for (const tie of tieElements) {
+                  const tieType = getAttribute(tie, "type")
+                  if (tieType === "stop") {
                     isTiedContinuation = true
                   }
                 }
-              }
 
-              // Skip tied continuations
-              if (isTiedContinuation) {
-                if (!("chord" in note)) {
-                  currentTime += duration
-                }
-                continue
-              }
-
-              const midiPitch = noteToMidiPitch(step, octave, alter)
-              const startTimeMs = divisionsToMs(
-                currentTime,
-                divisionsPerQuarter,
-                tempo
-              )
-              const durationMs = divisionsToMs(
-                duration,
-                divisionsPerQuarter,
-                tempo
-              )
-
-              notes.push(
-                new NoteEvent({
-                  pitch: midiPitch as MidiPitch,
-                  startTime: startTimeMs as Milliseconds,
-                  duration: durationMs as Milliseconds,
-                  measure: measureNumber as MeasureNumber,
-                  hand,
-                  voice,
-                })
-              )
-
-              // Advance time only if not a chord
-              if (!("chord" in note)) {
-                currentTime += duration
-              }
-
-              // Check if we need to apply backup after this note
-              // This is a heuristic: if we're mid-measure and there are more notes
-              // on a different voice, we likely need a backup
-              if (backupIndex < backupList.length && i < measureNotes.length - 1) {
-                const nextNote = measureNotes[i + 1] as Record<string, unknown> | undefined
-                const currentVoice = note["voice"]
-                const nextVoice = nextNote?.["voice"]
-
-                // If voice changes, apply backup
-                if (nextVoice && currentVoice !== nextVoice) {
-                  const b = backupList[backupIndex] as Record<string, unknown>
-                  if (b?.["duration"]) {
-                    currentTime -= Number(b["duration"])
+                // Skip tied continuations
+                if (isTiedContinuation) {
+                  if (!findChild(noteChildren, "chord")) {
+                    cursor += duration
                   }
-                  backupIndex++
+                  continue
                 }
-              }
-            }
-          }
 
-          // Handle any remaining forward elements at end of measure
-          for (const f of forwardList) {
-            const fwd = f as Record<string, unknown>
-            if (fwd?.["duration"]) {
-              currentTime += Number(fwd["duration"])
+                // Check if this is a chord note (shares time with previous note)
+                const isChord = !!findChild(noteChildren, "chord")
+
+                const midiPitch = noteToMidiPitch(step, octave, alter)
+                const startTimeMs = divisionsToMs(
+                  cursor,
+                  divisionsPerQuarter,
+                  tempo
+                )
+                const durationMs = divisionsToMs(
+                  duration,
+                  divisionsPerQuarter,
+                  tempo
+                )
+
+                notes.push(
+                  new NoteEvent({
+                    pitch: midiPitch as MidiPitch,
+                    startTime: startTimeMs as Milliseconds,
+                    duration: durationMs as Milliseconds,
+                    measure: measureNumber as MeasureNumber,
+                    hand,
+                    voice,
+                  })
+                )
+
+                // Advance cursor only if not a chord
+                if (!isChord) {
+                  cursor += duration
+                }
+                break
+              }
             }
           }
         }
@@ -342,7 +368,7 @@ export const MusicXmlServiceLive = Layer.succeed(
           name,
           composer,
           notes,
-          totalMeasures: currentMeasure,
+          totalMeasures: lastMeasureNumber,
           defaultTempo: tempo,
         }
       }),

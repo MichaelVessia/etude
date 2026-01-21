@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="3.1">
+  <work>
+    <work-title>Piano Grand Staff Test</work-title>
+  </work>
+  <identification>
+    <creator type="composer">Test</creator>
+  </identification>
+  <part-list>
+    <score-part id="P1">
+      <part-name>Piano</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <!-- Measure 1: Piano grand staff with RH and LH
+         RH (staff 1): C4 (quarter), D4 (quarter), E4 (quarter), F4 (quarter)
+         LH (staff 2): C3 (half), G3 (half)
+         RH starts at beat 1, plays continuously
+         LH also starts at beat 1, with half notes -->
+    <measure number="1">
+      <attributes>
+        <divisions>2</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <staves>2</staves>
+        <clef number="1"><sign>G</sign><line>2</line></clef>
+        <clef number="2"><sign>F</sign><line>4</line></clef>
+      </attributes>
+      <direction placement="above">
+        <direction-type>
+          <metronome><beat-unit>quarter</beat-unit><per-minute>120</per-minute></metronome>
+        </direction-type>
+        <sound tempo="120"/>
+      </direction>
+      <!-- RH: C4 quarter at beat 1 -->
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>quarter</type>
+        <voice>1</voice>
+        <staff>1</staff>
+      </note>
+      <!-- RH: D4 quarter at beat 2 -->
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>quarter</type>
+        <voice>1</voice>
+        <staff>1</staff>
+      </note>
+      <!-- RH: E4 quarter at beat 3 -->
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>quarter</type>
+        <voice>1</voice>
+        <staff>1</staff>
+      </note>
+      <!-- RH: F4 quarter at beat 4 -->
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>quarter</type>
+        <voice>1</voice>
+        <staff>1</staff>
+      </note>
+      <!-- Backup to beat 1 for LH -->
+      <backup>
+        <duration>8</duration>
+      </backup>
+      <!-- LH: C3 half at beat 1 -->
+      <note>
+        <pitch><step>C</step><octave>3</octave></pitch>
+        <duration>4</duration>
+        <type>half</type>
+        <voice>2</voice>
+        <staff>2</staff>
+      </note>
+      <!-- LH: G3 half at beat 3 -->
+      <note>
+        <pitch><step>G</step><octave>3</octave></pitch>
+        <duration>4</duration>
+        <type>half</type>
+        <voice>2</voice>
+        <staff>2</staff>
+      </note>
+    </measure>
+    <!-- Measure 2: More complex with forward element -->
+    <measure number="2">
+      <!-- RH: G4 half at beat 1 -->
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>4</duration>
+        <type>half</type>
+        <voice>1</voice>
+        <staff>1</staff>
+      </note>
+      <!-- RH: A4 half at beat 3 -->
+      <note>
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>4</duration>
+        <type>half</type>
+        <voice>1</voice>
+        <staff>1</staff>
+      </note>
+      <!-- Backup to beat 1 for LH -->
+      <backup>
+        <duration>8</duration>
+      </backup>
+      <!-- LH: Rest for beat 1 (forward to skip) -->
+      <forward>
+        <duration>2</duration>
+        <voice>2</voice>
+        <staff>2</staff>
+      </forward>
+      <!-- LH: E3 quarter at beat 2 -->
+      <note>
+        <pitch><step>E</step><octave>3</octave></pitch>
+        <duration>2</duration>
+        <type>quarter</type>
+        <voice>2</voice>
+        <staff>2</staff>
+      </note>
+      <!-- LH: F3 half at beat 3 -->
+      <note>
+        <pitch><step>F</step><octave>3</octave></pitch>
+        <duration>4</duration>
+        <type>half</type>
+        <voice>2</voice>
+        <staff>2</staff>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
