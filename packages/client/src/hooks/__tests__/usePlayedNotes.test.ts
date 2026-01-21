@@ -154,8 +154,9 @@ describe("useExtraNotes", () => {
       const extraResult: NoteSubmitResult = {
         pitch: 65,
         result: "extra",
-        timingOffset: 0,
+        playedTime: 0,
         expectedNoteTime: null,
+        timingOffset: 0,
       }
 
       const playheadPosition: PlayheadPosition = {
@@ -195,8 +196,9 @@ describe("useExtraNotes", () => {
       const correctResult: NoteSubmitResult = {
         pitch: 60,
         result: "correct",
-        timingOffset: 0,
+        playedTime: 0,
         expectedNoteTime: 0,
+        timingOffset: 0,
       }
 
       const playheadPosition: PlayheadPosition = {
@@ -222,8 +224,9 @@ describe("useExtraNotes", () => {
       const extraResult: NoteSubmitResult = {
         pitch: 65,
         result: "extra",
-        timingOffset: 0,
+        playedTime: 0,
         expectedNoteTime: null,
+        timingOffset: 0,
       }
 
       const playheadPosition: PlayheadPosition = {
@@ -260,8 +263,9 @@ describe("useExtraNotes", () => {
       const extraResult: NoteSubmitResult = {
         pitch: 60,
         result: "extra",
-        timingOffset: 0,
+        playedTime: 0,
         expectedNoteTime: null,
+        timingOffset: 0,
       }
 
       const playheadPosition: PlayheadPosition = {
@@ -304,8 +308,9 @@ describe("useExtraNotes", () => {
       const extraResult: NoteSubmitResult = {
         pitch: 66, // middle pitch (halfway between 60 and 72)
         result: "extra",
-        timingOffset: 0,
+        playedTime: 0,
         expectedNoteTime: null,
+        timingOffset: 0,
       }
 
       const playheadPosition: PlayheadPosition = {
@@ -354,11 +359,11 @@ describe("useExtraNotes", () => {
 
       act(() => {
         result.current.addExtraNote(
-          { pitch: 65, result: "extra", timingOffset: 0, expectedNoteTime: null },
+          { pitch: 65, result: "extra", playedTime: 0, expectedNoteTime: null, timingOffset: 0 },
           playheadPosition
         )
         result.current.addExtraNote(
-          { pitch: 67, result: "extra", timingOffset: 0, expectedNoteTime: null },
+          { pitch: 67, result: "extra", playedTime: 0, expectedNoteTime: null, timingOffset: 0 },
           playheadPosition
         )
       })
@@ -395,7 +400,7 @@ describe("useExtraNotes", () => {
 
       act(() => {
         result.current.addExtraNote(
-          { pitch: 65, result: "extra", timingOffset: 0, expectedNoteTime: null },
+          { pitch: 65, result: "extra", playedTime: 0, expectedNoteTime: null, timingOffset: 0 },
           playheadPosition
         )
       })
@@ -436,11 +441,11 @@ describe("useExtraNotes", () => {
       // Add some notes
       act(() => {
         result.current.addExtraNote(
-          { pitch: 65, result: "extra", timingOffset: 0, expectedNoteTime: null },
+          { pitch: 65, result: "extra", playedTime: 0, expectedNoteTime: null, timingOffset: 0 },
           playheadPosition
         )
         result.current.addExtraNote(
-          { pitch: 67, result: "extra", timingOffset: 0, expectedNoteTime: null },
+          { pitch: 67, result: "extra", playedTime: 0, expectedNoteTime: null, timingOffset: 0 },
           playheadPosition
         )
       })
@@ -453,7 +458,7 @@ describe("useExtraNotes", () => {
       // Add new note - should start from 0 again
       act(() => {
         result.current.addExtraNote(
-          { pitch: 69, result: "extra", timingOffset: 0, expectedNoteTime: null },
+          { pitch: 69, result: "extra", playedTime: 0, expectedNoteTime: null, timingOffset: 0 },
           playheadPosition
         )
       })

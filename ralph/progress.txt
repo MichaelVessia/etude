@@ -86,3 +86,8 @@
 **Story**: 3.1.0 - Fix voice/backup handling in MusicXML parser
 **Status**: complete
 ---
+
+## Iteration 9 - 2026-01-20 23:59
+**Story**: 3.2.0 - Add missing fields to WebSocket result messages
+**Status**: complete
+---

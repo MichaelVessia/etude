@@ -25,8 +25,9 @@ export interface SessionStartResult {
 export interface NoteSubmitResult {
   pitch: number
   result: "correct" | "wrong" | "extra" | "early" | "late"
-  timingOffset: number
+  playedTime: number
   expectedNoteTime: number | null // original startTime from piece start (for Verovio UI mapping)
+  timingOffset: number
 }
 
 export interface SessionEndResult {
@@ -110,8 +111,9 @@ export function useSession(): UseSessionResult {
       const result: NoteSubmitResult = {
         pitch: wsLastResult.pitch,
         result: wsLastResult.result,
-        timingOffset: wsLastResult.timingOffset,
+        playedTime: wsLastResult.playedTime,
         expectedNoteTime: wsLastResult.expectedNoteTime,
+        timingOffset: wsLastResult.timingOffset,
       }
       setLastNoteResult(result)
 

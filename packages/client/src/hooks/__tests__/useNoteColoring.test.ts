@@ -72,8 +72,9 @@ describe("useNoteColoring", () => {
       const noteResult: NoteSubmitResult = {
         pitch: 60,
         result: "correct",
-        timingOffset: 50,
+        playedTime: 50,
         expectedNoteTime: 0,
+        timingOffset: 50,
       }
 
       act(() => {
@@ -98,8 +99,9 @@ describe("useNoteColoring", () => {
       const noteResult: NoteSubmitResult = {
         pitch: 60,
         result: "wrong",
-        timingOffset: 0,
+        playedTime: 0,
         expectedNoteTime: 0,
+        timingOffset: 0,
       }
 
       act(() => {
@@ -123,8 +125,9 @@ describe("useNoteColoring", () => {
       const noteResult: NoteSubmitResult = {
         pitch: 60,
         result: "extra",
-        timingOffset: 0,
+        playedTime: 0,
         expectedNoteTime: null,
+        timingOffset: 0,
       }
 
       act(() => {
@@ -153,8 +156,9 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 60,
           result: "correct",
-          timingOffset: 0,
+          playedTime: 0,
           expectedNoteTime: 0,
+          timingOffset: 0,
         })
       })
 
@@ -166,8 +170,9 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 60,
           result: "correct",
-          timingOffset: 0,
+          playedTime: 1000,
           expectedNoteTime: 1000,
+          timingOffset: 0,
         })
       })
 
@@ -195,14 +200,16 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 60,
           result: "correct",
-          timingOffset: 0,
+          playedTime: 0,
           expectedNoteTime: 0,
+          timingOffset: 0,
         })
         result.current.processNoteResult({
           pitch: 62,
           result: "wrong",
-          timingOffset: 0,
+          playedTime: 500,
           expectedNoteTime: 500,
+          timingOffset: 0,
         })
       })
 
@@ -264,14 +271,16 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 60,
           result: "correct",
-          timingOffset: 0,
+          playedTime: 0,
           expectedNoteTime: 0,
+          timingOffset: 0,
         })
         result.current.processNoteResult({
           pitch: 62,
           result: "correct",
-          timingOffset: 0,
+          playedTime: 500,
           expectedNoteTime: 500,
+          timingOffset: 0,
         })
       })
 
@@ -312,8 +321,9 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 60,
           result: "correct",
-          timingOffset: 10,
+          playedTime: 10,
           expectedNoteTime: 0,
+          timingOffset: 10,
         })
       })
       expect(getNoteColor("note-c")).toBe("#16a34a") // green
@@ -322,8 +332,9 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 64,
           result: "correct",
-          timingOffset: 15,
+          playedTime: 15,
           expectedNoteTime: 0,
+          timingOffset: 15,
         })
       })
       expect(getNoteColor("note-e")).toBe("#16a34a")
@@ -332,8 +343,9 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 67,
           result: "correct",
-          timingOffset: 20,
+          playedTime: 20,
           expectedNoteTime: 0,
+          timingOffset: 20,
         })
       })
       expect(getNoteColor("note-g")).toBe("#16a34a")
@@ -359,20 +371,23 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 67,
           result: "correct",
-          timingOffset: 10,
+          playedTime: 10,
           expectedNoteTime: 0,
+          timingOffset: 10,
         })
         result.current.processNoteResult({
           pitch: 60,
           result: "correct",
-          timingOffset: 15,
+          playedTime: 15,
           expectedNoteTime: 0,
+          timingOffset: 15,
         })
         result.current.processNoteResult({
           pitch: 64,
           result: "correct",
-          timingOffset: 20,
+          playedTime: 20,
           expectedNoteTime: 0,
+          timingOffset: 20,
         })
       })
 
@@ -401,14 +416,16 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 60,
           result: "correct",
-          timingOffset: 10,
+          playedTime: 10,
           expectedNoteTime: 0,
+          timingOffset: 10,
         })
         result.current.processNoteResult({
           pitch: 67,
           result: "correct",
-          timingOffset: 20,
+          playedTime: 20,
           expectedNoteTime: 0,
+          timingOffset: 20,
         })
       })
 
@@ -439,8 +456,9 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 60,
           result: "correct",
-          timingOffset: 50,
+          playedTime: 1050,
           expectedNoteTime: 1000, // This is the key: server tells us which note matched
+          timingOffset: 50,
         })
       })
 
@@ -469,20 +487,23 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 60,
           result: "correct",
-          timingOffset: 10,
+          playedTime: 10,
           expectedNoteTime: 0,
+          timingOffset: 10,
         })
         result.current.processNoteResult({
           pitch: 64,
           result: "wrong",
-          timingOffset: 200, // Late
+          playedTime: 200,
           expectedNoteTime: 0,
+          timingOffset: 200, // Late
         })
         result.current.processNoteResult({
           pitch: 67,
           result: "correct",
-          timingOffset: 20,
+          playedTime: 20,
           expectedNoteTime: 0,
+          timingOffset: 20,
         })
       })
 
@@ -532,8 +553,9 @@ describe("useNoteColoring", () => {
         result.current.processNoteResult({
           pitch: 60,
           result: "correct",
-          timingOffset: 0,
+          playedTime: 0,
           expectedNoteTime: 0,
+          timingOffset: 0,
         })
       })
 

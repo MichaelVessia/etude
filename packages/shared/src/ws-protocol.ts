@@ -32,8 +32,9 @@ export class WsResultMessage extends Schema.Class<WsResultMessage>("WsResultMess
   type: Schema.Literal("result"),
   pitch: Schema.Number,
   result: Schema.Literal("correct", "early", "late", "extra", "wrong"),
-  timingOffset: Schema.Number,
+  playedTime: Schema.Number,
   expectedNoteTime: Schema.NullOr(Schema.Number),
+  timingOffset: Schema.Number,
 }) {}
 
 export class WsErrorMessage extends Schema.Class<WsErrorMessage>("WsErrorMessage")({

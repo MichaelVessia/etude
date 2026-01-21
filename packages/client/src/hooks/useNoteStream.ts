@@ -14,8 +14,9 @@ const encodePongMessage = Schema.encodeSync(WsPongMessage)
 export interface NoteResult {
   pitch: number
   result: "correct" | "early" | "late" | "extra" | "wrong"
-  timingOffset: number
+  playedTime: number
   expectedNoteTime: number | null
+  timingOffset: number
 }
 
 export interface SessionScore {
@@ -137,8 +138,9 @@ export function useNoteStream(
             setLastResult({
               pitch: data.pitch,
               result: data.result,
-              timingOffset: data.timingOffset,
+              playedTime: data.playedTime,
               expectedNoteTime: data.expectedNoteTime,
+              timingOffset: data.timingOffset,
             })
             break
 

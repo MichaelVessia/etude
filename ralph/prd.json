@@ -275,7 +275,7 @@
         ],
         "pattern": "Protocol extension with backwards compatibility"
       },
-      "status": "pending",
+      "status": "complete",
       "estimated_complexity": "small"
     },
     {

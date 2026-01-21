@@ -225,16 +225,18 @@ describe("useNoteStream", () => {
           type: "result",
           pitch: 60,
           result: "correct",
-          timingOffset: 25,
+          playedTime: 100,
           expectedNoteTime: 0,
+          timingOffset: 25,
         })
       })
 
       expect(result.current.lastResult).toEqual({
         pitch: 60,
         result: "correct",
-        timingOffset: 25,
+        playedTime: 100,
         expectedNoteTime: 0,
+        timingOffset: 25,
       })
     })
 

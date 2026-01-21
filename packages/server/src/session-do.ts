@@ -294,8 +294,9 @@ export class SessionDO implements DurableObject {
               type: "result",
               pitch: result.pitch,
               result: result.result,
-              timingOffset: result.timingOffset,
+              playedTime: result.playedTime,
               expectedNoteTime: result.expectedNoteTime,
+              timingOffset: result.timingOffset,
             })
           )
           server.send(JSON.stringify(resultMsg))
@@ -323,18 +324,19 @@ export class SessionDO implements DurableObject {
   private processNote(note: { pitch: number; velocity: number; timestamp: number; on: boolean }): {
     pitch: number
     result: "correct" | "wrong" | "extra"
-    timingOffset: number
+    playedTime: number
     expectedNoteTime: number | null
+    timingOffset: number
   } {
     if (!this.sessionState) {
       console.log("[DEBUG] processNote: no session state")
-      return { pitch: note.pitch, result: "extra", timingOffset: 0, expectedNoteTime: null }
+      return { pitch: note.pitch, result: "extra", playedTime: note.timestamp, expectedNoteTime: null, timingOffset: 0 }
     }
 
     // Only process note-on events
     if (!note.on) {
       console.log(`[DEBUG] processNote: note-off ignored pitch=${note.pitch}`)
-      return { pitch: note.pitch, result: "extra", timingOffset: 0, expectedNoteTime: null }
+      return { pitch: note.pitch, result: "extra", playedTime: note.timestamp, expectedNoteTime: null, timingOffset: 0 }
     }
 
     // Calculate timing offset on first note
@@ -380,8 +382,9 @@ export class SessionDO implements DurableObject {
     return {
       pitch: note.pitch,
       result: result.result,
-      timingOffset: result.timingOffset,
+      playedTime: adjustedTimestamp,
       expectedNoteTime: originalNoteTime,
+      timingOffset: result.timingOffset,
     }
   }
 
