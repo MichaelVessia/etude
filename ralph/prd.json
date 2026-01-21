@@ -164,7 +164,7 @@
         ],
         "pattern": "Branded types for compile-time safety"
       },
-      "status": "pending",
+      "status": "complete",
       "estimated_complexity": "medium"
     },
     {
