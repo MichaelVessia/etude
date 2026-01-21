@@ -30,8 +30,6 @@ export interface UseNoteColoringResult {
 export function useNoteColoring(): UseNoteColoringResult {
   // Map from pitch to array of note elements (in onset order)
   const pitchToNotesRef = useRef<Map<number, NoteElementInfo[]>>(new Map())
-  // Track next uncolored index for each pitch
-  const pitchNextIndexRef = useRef<Map<number, number>>(new Map())
   // All notes sorted by onset (for missed note detection)
   const allNotesRef = useRef<NoteElementInfo[]>([])
   // Track colored state by elementId
@@ -78,7 +76,6 @@ export function useNoteColoring(): UseNoteColoringResult {
   // Initialize note maps from Verovio elements
   const initializeNoteMap = useCallback((noteElements: NoteElementInfo[]) => {
     pitchToNotesRef.current.clear()
-    pitchNextIndexRef.current.clear()
     colorStateRef.current.clear()
 
     // Sort notes by onset time
@@ -89,9 +86,8 @@ export function useNoteColoring(): UseNoteColoringResult {
     for (const note of sortedNotes) {
       if (!pitchToNotesRef.current.has(note.pitch)) {
         pitchToNotesRef.current.set(note.pitch, [])
-        pitchNextIndexRef.current.set(note.pitch, 0)
       }
-      pitchToNotesRef.current.get(note.pitch)!.push(note)
+      pitchToNotesRef.current.get(note.pitch)?.push(note)
 
       // Initialize as pending
       colorStateRef.current.set(note.elementId, {
@@ -99,7 +95,6 @@ export function useNoteColoring(): UseNoteColoringResult {
         state: "pending",
       })
     }
-
   }, [])
 
   // Process a note result from the server
@@ -110,16 +105,34 @@ export function useNoteColoring(): UseNoteColoringResult {
     // Trust server result directly
     const state: NoteColorState = result.result === "correct" ? "correct" : "wrong"
 
-    // Find the next uncolored note with this pitch
+    // Find the note with matching pitch closest to expected time
     const notesForPitch = pitchToNotesRef.current.get(result.pitch)
     if (!notesForPitch || notesForPitch.length === 0) return
 
-    const nextIndex = pitchNextIndexRef.current.get(result.pitch) ?? 0
-    if (nextIndex >= notesForPitch.length) return
+    // Use time-based matching: find uncolored note closest to expectedNoteTime
+    const expectedTime = result.expectedNoteTime ?? 0
 
-    const noteToColor = notesForPitch[nextIndex]!
+    // Filter to only pending (uncolored) notes
+    const pendingNotes = notesForPitch.filter(note => {
+      const currentState = colorStateRef.current.get(note.elementId)
+      return currentState?.state === "pending"
+    })
+
+    if (pendingNotes.length === 0) return
+
+    // Find the note closest to the expected time
+    let noteToColor = pendingNotes[0]
+    let minDiff = Math.abs(noteToColor.onset - expectedTime)
+
+    for (const note of pendingNotes) {
+      const diff = Math.abs(note.onset - expectedTime)
+      if (diff < minDiff) {
+        minDiff = diff
+        noteToColor = note
+      }
+    }
+
     applyColor(noteToColor.elementId, state)
-    pitchNextIndexRef.current.set(result.pitch, nextIndex + 1)
   }, [applyColor])
 
   // Mark notes as missed when playhead passes them
@@ -137,13 +150,9 @@ export function useNoteColoring(): UseNoteColoringResult {
 
   // Reset all notes to pending (black)
   const resetColors = useCallback(() => {
-    // Reset visual colors
+    // Reset visual colors and state to pending
     for (const [elementId] of colorStateRef.current) {
       applyColor(elementId, "pending")
-    }
-    // Reset pitch indices
-    for (const pitch of pitchNextIndexRef.current.keys()) {
-      pitchNextIndexRef.current.set(pitch, 0)
     }
   }, [applyColor])
 

@@ -66,3 +66,8 @@
 **Story**: 2.1.0 - Define timing contract with branded types
 **Status**: complete
 ---
+
+## Iteration 5 - 2026-01-20 23:39
+**Story**: 2.2.0 - Fix chord note coloring for out-of-order playing
+**Status**: complete
+---

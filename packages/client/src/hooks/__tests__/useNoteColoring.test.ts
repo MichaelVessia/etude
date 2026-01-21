@@ -416,6 +416,80 @@ describe("useNoteColoring", () => {
       expect(getNoteColor("note-e")).toBeNull() // Still pending
       expect(getNoteColor("note-g")).toBe("#16a34a")
     })
+
+    it("uses time-based matching for same pitch at different times", () => {
+      // Scenario: chord at t=0 with C4, then melody C4 at t=1000
+      // If player plays the melody C4 first, it should color the correct note
+      createMockNoteElement("chord-c")
+      createMockNoteElement("chord-e")
+      createMockNoteElement("melody-c")
+
+      const { result } = renderHook(() => useNoteColoring())
+
+      act(() => {
+        result.current.initializeNoteMap([
+          { elementId: "chord-c", pitch: 60, onset: 0, duration: 500, page: 1 },
+          { elementId: "chord-e", pitch: 64, onset: 0, duration: 500, page: 1 },
+          { elementId: "melody-c", pitch: 60, onset: 1000, duration: 500, page: 1 },
+        ])
+      })
+
+      // Server says "melody C4 at t=1000 was played"
+      act(() => {
+        result.current.processNoteResult({
+          pitch: 60,
+          result: "correct",
+          timingOffset: 50,
+          expectedNoteTime: 1000, // This is the key: server tells us which note matched
+        })
+      })
+
+      // melody-c should be colored, NOT chord-c (which was the first C4 in the list)
+      expect(getNoteColor("chord-c")).toBeNull() // Still pending
+      expect(getNoteColor("melody-c")).toBe("#16a34a") // Colored green
+    })
+
+    it("marks missed chord note as red while others stay green", () => {
+      createMockNoteElement("note-c")
+      createMockNoteElement("note-e")
+      createMockNoteElement("note-g")
+
+      const { result } = renderHook(() => useNoteColoring())
+
+      act(() => {
+        result.current.initializeNoteMap([
+          { elementId: "note-c", pitch: 60, onset: 0, duration: 500, page: 1 },
+          { elementId: "note-e", pitch: 64, onset: 0, duration: 500, page: 1 },
+          { elementId: "note-g", pitch: 67, onset: 0, duration: 500, page: 1 },
+        ])
+      })
+
+      // Play C and G correctly, but E is wrong (wrong pitch played)
+      act(() => {
+        result.current.processNoteResult({
+          pitch: 60,
+          result: "correct",
+          timingOffset: 10,
+          expectedNoteTime: 0,
+        })
+        result.current.processNoteResult({
+          pitch: 64,
+          result: "wrong",
+          timingOffset: 200, // Late
+          expectedNoteTime: 0,
+        })
+        result.current.processNoteResult({
+          pitch: 67,
+          result: "correct",
+          timingOffset: 20,
+          expectedNoteTime: 0,
+        })
+      })
+
+      expect(getNoteColor("note-c")).toBe("#16a34a") // green
+      expect(getNoteColor("note-e")).toBe("#dc2626") // red (wrong)
+      expect(getNoteColor("note-g")).toBe("#16a34a") // green
+    })
   })
 
   describe("markMissedNotes", () => {
