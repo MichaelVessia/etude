@@ -220,7 +220,7 @@
         ],
         "pattern": "Tempo-aware time conversions"
       },
-      "status": "pending",
+      "status": "complete",
       "estimated_complexity": "medium"
     },
     {

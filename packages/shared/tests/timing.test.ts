@@ -11,6 +11,9 @@ import {
   playbackToPiece,
   createTimingContext,
   adjustForTempo,
+  pieceToPlaybackTime,
+  playbackToPieceTime,
+  wallTimeToPieceTime,
 } from "../src/timing.js"
 
 describe("timing types", () => {
@@ -178,6 +181,83 @@ describe("timing types", () => {
       // Relative time: 1000ms, scaled: 2000ms
       const result = adjustForTempo(pieceTime(3000), pieceTime(2000), 2.0)
       expect(result).toBe(2000)
+    })
+  })
+
+  describe("pieceToPlaybackTime", () => {
+    it("returns same time at 100% tempo", () => {
+      expect(pieceToPlaybackTime(1000, 100)).toBe(1000)
+    })
+
+    it("at 50% tempo: piece time takes 2x wall time", () => {
+      // 1000ms piece time takes 2000ms wall time at 50% tempo
+      expect(pieceToPlaybackTime(1000, 50)).toBe(2000)
+    })
+
+    it("at 150% tempo: piece time takes less wall time", () => {
+      // 1000ms piece time takes ~667ms wall time at 150% tempo
+      expect(pieceToPlaybackTime(1000, 150)).toBeCloseTo(666.67, 1)
+    })
+
+    it("at 200% tempo: piece time takes half wall time", () => {
+      expect(pieceToPlaybackTime(1000, 200)).toBe(500)
+    })
+  })
+
+  describe("playbackToPieceTime", () => {
+    it("returns same time at 100% tempo", () => {
+      expect(playbackToPieceTime(1000, 100)).toBe(1000)
+    })
+
+    it("at 50% tempo: wall time covers less piece time", () => {
+      // 2000ms wall time = 1000ms piece time at 50% tempo
+      expect(playbackToPieceTime(2000, 50)).toBe(1000)
+    })
+
+    it("at 150% tempo: wall time covers more piece time", () => {
+      // 1000ms wall time = 1500ms piece time at 150% tempo
+      expect(playbackToPieceTime(1000, 150)).toBe(1500)
+    })
+
+    it("is inverse of pieceToPlaybackTime", () => {
+      const pieceMs = 1234
+      const tempo = 75
+      const playback = pieceToPlaybackTime(pieceMs, tempo)
+      const roundTrip = playbackToPieceTime(playback, tempo)
+      expect(roundTrip).toBeCloseTo(pieceMs, 10)
+    })
+  })
+
+  describe("wallTimeToPieceTime", () => {
+    it("returns same duration at 100% tempo", () => {
+      expect(wallTimeToPieceTime(300, 100)).toBe(300)
+    })
+
+    it("at 50% tempo: 300ms wall = 150ms piece time", () => {
+      // At slower tempo, same wall time covers less piece time
+      expect(wallTimeToPieceTime(300, 50)).toBe(150)
+    })
+
+    it("at 150% tempo: 300ms wall = 450ms piece time", () => {
+      // At faster tempo, same wall time covers more piece time
+      expect(wallTimeToPieceTime(300, 150)).toBe(450)
+    })
+
+    it("used for grace period conversion", () => {
+      // Grace period of 300ms wall time at various tempos
+      // This is the key use case for missed note detection
+
+      // At 50% tempo: grace period in piece time is smaller
+      const grace50 = wallTimeToPieceTime(300, 50)
+      expect(grace50).toBe(150)
+
+      // At 100% tempo: grace period unchanged
+      const grace100 = wallTimeToPieceTime(300, 100)
+      expect(grace100).toBe(300)
+
+      // At 150% tempo: grace period in piece time is larger
+      const grace150 = wallTimeToPieceTime(300, 150)
+      expect(grace150).toBe(450)
     })
   })
 })

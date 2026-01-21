@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef } from "react"
+import { wallTimeToPieceTime } from "@etude/shared"
 import type { NoteElementInfo } from "./useVerovio.js"
 import type { NoteSubmitResult } from "./useSession.js"
 
@@ -20,7 +21,12 @@ const NOTE_COLORS: Record<NoteColorState, string> = {
 export interface UseNoteColoringResult {
   initializeNoteMap: (noteElements: NoteElementInfo[]) => void
   processNoteResult: (result: NoteSubmitResult) => void
-  markMissedNotes: (currentTime: number) => void
+  /**
+   * Mark notes as missed when the playhead passes them.
+   * @param currentTime - Current playhead position in piece time (ms)
+   * @param tempoPercent - Current tempo percentage (100 = normal, 50 = half speed)
+   */
+  markMissedNotes: (currentTime: number, tempoPercent: number) => void
   resetColors: () => void
   getNoteStates: () => Map<string, NoteColorInfo>
   /** Re-apply all colors to the DOM (call after SVG re-renders) */
@@ -136,13 +142,17 @@ export function useNoteColoring(): UseNoteColoringResult {
   }, [applyColor])
 
   // Mark notes as missed when playhead passes them
-  const markMissedNotes = useCallback((currentTime: number) => {
-    const graceMs = 300 // Match server timing threshold
+  const markMissedNotes = useCallback((currentTime: number, tempoPercent: number) => {
+    const graceWallMs = 300 // Grace period in wall-clock time (consistent UX)
+    // Convert grace period to piece time based on tempo
+    // At 50% tempo: 300ms wall = 150ms piece time (slower playhead, shorter piece-time grace)
+    // At 150% tempo: 300ms wall = 450ms piece time (faster playhead, longer piece-time grace)
+    const gracePieceMs = wallTimeToPieceTime(graceWallMs, tempoPercent)
 
     for (const note of allNotesRef.current) {
       const currentState = colorStateRef.current.get(note.elementId)
       // Only mark as missed if still pending and time + grace has passed
-      if (currentState?.state === "pending" && note.onset + graceMs < currentTime) {
+      if (currentState?.state === "pending" && note.onset + gracePieceMs < currentTime) {
         applyColor(note.elementId, "missed")
       }
     }

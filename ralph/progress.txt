@@ -71,3 +71,8 @@
 **Story**: 2.2.0 - Fix chord note coloring for out-of-order playing
 **Status**: complete
 ---
+
+## Iteration 6 - 2026-01-20 23:45
+**Story**: 2.3.0 - Fix playhead tempo alignment for missed note detection
+**Status**: complete
+---

@@ -132,3 +132,51 @@ export function adjustForTempo(
   const adjusted = (time - baseTime) * tempoRatio
   return adjusted as PieceTime
 }
+
+// Simple tempo conversion functions for playhead/UI timing
+
+/**
+ * Convert piece time to wall-clock playback time at a given tempo.
+ *
+ * This answers: "How much wall time will pass to reach this point in the piece?"
+ *
+ * At 50% tempo, a note at 1000ms piece time takes 2000ms wall time to reach.
+ * At 150% tempo, a note at 1000ms piece time takes 667ms wall time to reach.
+ *
+ * @param pieceTimeMs - Position in piece (milliseconds)
+ * @param tempoPercent - Tempo as percentage (100 = normal, 50 = half speed)
+ * @returns Wall-clock time in milliseconds
+ */
+export function pieceToPlaybackTime(pieceTimeMs: number, tempoPercent: number): number {
+  return pieceTimeMs * (100 / tempoPercent)
+}
+
+/**
+ * Convert wall-clock playback time to piece time at a given tempo.
+ *
+ * This answers: "How far into the piece are we after this much wall time?"
+ *
+ * At 50% tempo, 2000ms wall time = 1000ms piece time.
+ * At 150% tempo, 667ms wall time = 1000ms piece time.
+ *
+ * @param playbackTimeMs - Wall-clock time elapsed (milliseconds)
+ * @param tempoPercent - Tempo as percentage (100 = normal, 50 = half speed)
+ * @returns Position in piece in milliseconds
+ */
+export function playbackToPieceTime(playbackTimeMs: number, tempoPercent: number): number {
+  return playbackTimeMs * (tempoPercent / 100)
+}
+
+/**
+ * Convert a duration from wall time to piece time.
+ *
+ * Used for converting grace periods: at slower tempos, the same wall-time
+ * grace period represents a smaller piece-time interval.
+ *
+ * @param wallTimeMs - Duration in wall-clock milliseconds
+ * @param tempoPercent - Tempo as percentage (100 = normal, 50 = half speed)
+ * @returns Duration in piece-time milliseconds
+ */
+export function wallTimeToPieceTime(wallTimeMs: number, tempoPercent: number): number {
+  return wallTimeMs * (tempoPercent / 100)
+}

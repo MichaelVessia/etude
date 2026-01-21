@@ -59,7 +59,10 @@ export function Practice({ midi, onSelectDevice }: PracticeProps) {
 
   // Playhead callbacks (stable refs to avoid recreation)
   const handlePlayheadTimeUpdate = useCallback(
-    (time: number) => noteColoringRef.current.markMissedNotes(time),
+    (time: number) => {
+      const tempo = sessionRef.current.sessionState?.tempo ?? 100
+      noteColoringRef.current.markMissedNotes(time, tempo)
+    },
     []
   )
   const handlePlayheadEnd = useCallback(() => {

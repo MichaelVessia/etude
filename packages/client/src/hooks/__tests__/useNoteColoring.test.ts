@@ -493,7 +493,7 @@ describe("useNoteColoring", () => {
   })
 
   describe("markMissedNotes", () => {
-    it("marks pending notes as missed when time passes", () => {
+    it("marks pending notes as missed when time passes at 100% tempo", () => {
       createMockNoteElement("note1")
       createMockNoteElement("note2")
 
@@ -506,9 +506,9 @@ describe("useNoteColoring", () => {
         ])
       })
 
-      // Time passes note1's onset + grace period (300ms)
+      // Time passes note1's onset + grace period (300ms at 100% tempo)
       act(() => {
-        result.current.markMissedNotes(350)
+        result.current.markMissedNotes(350, 100)
       })
 
       expect(getNoteColor("note1")).toBe("#9ca3af") // gray (missed)
@@ -539,12 +539,74 @@ describe("useNoteColoring", () => {
 
       // Try to mark as missed
       act(() => {
-        result.current.markMissedNotes(350)
+        result.current.markMissedNotes(350, 100)
       })
 
       // Should still be green (correct), not gray (missed)
       expect(getNoteColor("note1")).toBe("#16a34a")
       expect(result.current.getNoteStates().get("note1")?.state).toBe("correct")
+    })
+
+    it("at 50% tempo: notes not marked missed too early", () => {
+      createMockNoteElement("note1")
+
+      const { result } = renderHook(() => useNoteColoring())
+
+      act(() => {
+        result.current.initializeNoteMap([
+          { elementId: "note1", pitch: 60, onset: 1000, duration: 500, page: 1 },
+        ])
+      })
+
+      // At 50% tempo, the playhead reaches 1000ms piece time after 2000ms wall time.
+      // The 300ms wall-time grace = 150ms piece-time grace at 50% tempo.
+      // So the note should be missed when piece time > 1000 + 150 = 1150ms.
+      // At piece time 1100ms, note should NOT be missed yet (< 1150ms threshold).
+      act(() => {
+        result.current.markMissedNotes(1100, 50)
+      })
+
+      expect(getNoteColor("note1")).toBeNull() // still pending
+      expect(result.current.getNoteStates().get("note1")?.state).toBe("pending")
+
+      // At piece time 1200ms, note SHOULD be missed (> 1150ms threshold).
+      act(() => {
+        result.current.markMissedNotes(1200, 50)
+      })
+
+      expect(getNoteColor("note1")).toBe("#9ca3af") // gray (missed)
+      expect(result.current.getNoteStates().get("note1")?.state).toBe("missed")
+    })
+
+    it("at 150% tempo: notes not marked missed too late", () => {
+      createMockNoteElement("note1")
+
+      const { result } = renderHook(() => useNoteColoring())
+
+      act(() => {
+        result.current.initializeNoteMap([
+          { elementId: "note1", pitch: 60, onset: 1000, duration: 500, page: 1 },
+        ])
+      })
+
+      // At 150% tempo, the playhead reaches 1000ms piece time after ~667ms wall time.
+      // The 300ms wall-time grace = 450ms piece-time grace at 150% tempo.
+      // So the note should be missed when piece time > 1000 + 450 = 1450ms.
+      // At piece time 1400ms, note should NOT be missed yet (< 1450ms threshold).
+      act(() => {
+        result.current.markMissedNotes(1400, 150)
+      })
+
+      expect(getNoteColor("note1")).toBeNull() // still pending
+      expect(result.current.getNoteStates().get("note1")?.state).toBe("pending")
+
+      // At piece time 1500ms, note SHOULD be missed (> 1450ms threshold).
+      act(() => {
+        result.current.markMissedNotes(1500, 150)
+      })
+
+      expect(getNoteColor("note1")).toBe("#9ca3af") // gray (missed)
+      expect(result.current.getNoteStates().get("note1")?.state).toBe("missed")
     })
   })
 })
