@@ -59,11 +59,19 @@ export class WsSessionEndMessage extends Schema.Class<WsSessionEndMessage>("WsSe
   }),
 }) {}
 
+export class WsRestoreMessage extends Schema.Class<WsRestoreMessage>("WsRestoreMessage")({
+  type: Schema.Literal("restore"),
+  sessionId: Schema.String,
+  playedNoteCount: Schema.Number,
+  matchedCount: Schema.Number,
+}) {}
+
 export const WsServerMessage = Schema.Union(
   WsReadyMessage,
   WsResultMessage,
   WsErrorMessage,
   WsPingMessage,
-  WsSessionEndMessage
+  WsSessionEndMessage,
+  WsRestoreMessage
 )
 export type WsServerMessage = typeof WsServerMessage.Type

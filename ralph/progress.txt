@@ -91,3 +91,8 @@
 **Story**: 3.2.0 - Add missing fields to WebSocket result messages
 **Status**: complete
 ---
+
+## Iteration 10 - 2026-01-21 07:53
+**Story**: 4.1.0 - Implement full session state persistence in DO
+**Status**: complete
+---

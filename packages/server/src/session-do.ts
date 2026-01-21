@@ -9,6 +9,7 @@ import {
   WsResultMessage,
   WsPingMessage,
   WsSessionEndMessage,
+  WsRestoreMessage,
   matchNote as sharedMatchNote,
   DEFAULT_CONFIG,
 } from "@etude/shared"
@@ -20,6 +21,7 @@ const encodeReadyMessage = Schema.encodeSync(WsReadyMessage)
 const encodeResultMessage = Schema.encodeSync(WsResultMessage)
 const encodePingMessage = Schema.encodeSync(WsPingMessage)
 const encodeSessionEndMessage = Schema.encodeSync(WsSessionEndMessage)
+const encodeRestoreMessage = Schema.encodeSync(WsRestoreMessage)
 
 // WebSocketPair is a global in Cloudflare Workers runtime
 declare const WebSocketPair: {
@@ -74,11 +76,40 @@ export interface MatchResult {
 }
 
 /**
+ * Full session state persisted to DO storage for recovery after eviction.
+ * Includes playedNotes and matchResults, unlike the basic wsSession storage.
+ */
+export interface PersistedSessionState {
+  sessionId: string
+  pieceId: PieceId
+  expectedNotes: NoteEvent[]
+  originalNotes: NoteEvent[]
+  matchedIndices: number[] // Set<number> serialized as array
+  playedNotes: PlayedNote[]
+  matchResults: MatchResult[]
+  measureStart: number
+  measureEnd: number
+  hand: Hand
+  tempo: number
+  startTime: number
+  firstNoteOffset: number | null
+  lastActivityTime: number
+}
+
+// Session timeout: 1 hour of inactivity
+const SESSION_TIMEOUT_MS = 60 * 60 * 1000
+
+/**
  * Durable Object for session management.
  *
  * Supports two modes:
  * 1. HTTP mode (legacy): State stored in DO storage, read/write per request
  * 2. WebSocket mode: State in memory during connection, much faster
+ *
+ * Session persistence:
+ * - playedNotes and matchResults are persisted (debounced, max 1/sec)
+ * - State restored on reconnect after DO eviction
+ * - Session times out after 1 hour of inactivity
  */
 export class SessionDO implements DurableObject {
   private state: DurableObjectState
@@ -88,8 +119,37 @@ export class SessionDO implements DurableObject {
   private sessionState: SessionState | null = null
   private pingInterval: ReturnType<typeof setInterval> | null = null
 
+  // Debounced persistence state
+  private persistScheduled = false
+  private lastPersistTime = 0
+
   constructor(state: DurableObjectState) {
     this.state = state
+  }
+
+  /**
+   * Alarm handler for session timeout cleanup.
+   * Called by CF Workers runtime when alarm fires.
+   */
+  async alarm(): Promise<void> {
+    const persisted = await this.state.storage.get<PersistedSessionState>("persistedSession")
+    if (!persisted) {
+      // No session to clean up
+      return
+    }
+
+    const now = Date.now()
+    const timeSinceActivity = now - persisted.lastActivityTime
+
+    if (timeSinceActivity >= SESSION_TIMEOUT_MS) {
+      // Session timed out, clean up
+      await this.state.storage.deleteAll()
+      this.sessionState = null
+    } else {
+      // Not yet timed out, reschedule alarm for remaining time
+      const nextAlarmTime = persisted.lastActivityTime + SESSION_TIMEOUT_MS
+      await this.state.storage.setAlarm(nextAlarmTime)
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -222,30 +282,56 @@ export class SessionDO implements DurableObject {
       return new Response("Session already has active connection", { status: 409 })
     }
 
+    // Track whether this is a restore (reconnect) vs fresh connection
+    let isRestore = false
+
     // Try to restore session state from storage if not in memory
     if (!this.sessionState) {
-      const stored = await this.state.storage.get<{
-        sessionId: string
-        pieceId: PieceId
-        expectedNotes: NoteEvent[]
-        originalNotes: NoteEvent[]
-        measureStart: number
-        measureEnd: number
-        hand: Hand
-        tempo: number
-        startTime: number
-      }>("wsSession")
+      // First try full persisted state (includes playedNotes, matchResults)
+      const persisted = await this.state.storage.get<PersistedSessionState>("persistedSession")
 
-      if (stored) {
+      if (persisted) {
         this.sessionState = {
-          ...stored,
-          matchedIndices: new Set(),
-          playedNotes: [],
-          matchResults: [],
-          firstNoteOffset: null,
+          sessionId: persisted.sessionId,
+          pieceId: persisted.pieceId,
+          expectedNotes: persisted.expectedNotes,
+          originalNotes: persisted.originalNotes,
+          matchedIndices: new Set(persisted.matchedIndices),
+          playedNotes: persisted.playedNotes,
+          matchResults: persisted.matchResults,
+          measureStart: persisted.measureStart,
+          measureEnd: persisted.measureEnd,
+          hand: persisted.hand,
+          tempo: persisted.tempo,
+          startTime: persisted.startTime,
+          firstNoteOffset: persisted.firstNoteOffset,
         }
-        // Clean up storage after restoring
-        await this.state.storage.delete("wsSession")
+        isRestore = true
+      } else {
+        // Fall back to basic wsSession storage (fresh session init)
+        const stored = await this.state.storage.get<{
+          sessionId: string
+          pieceId: PieceId
+          expectedNotes: NoteEvent[]
+          originalNotes: NoteEvent[]
+          measureStart: number
+          measureEnd: number
+          hand: Hand
+          tempo: number
+          startTime: number
+        }>("wsSession")
+
+        if (stored) {
+          this.sessionState = {
+            ...stored,
+            matchedIndices: new Set(),
+            playedNotes: [],
+            matchResults: [],
+            firstNoteOffset: null,
+          }
+          // Clean up wsSession storage after restoring
+          await this.state.storage.delete("wsSession")
+        }
       }
     }
 
@@ -262,14 +348,28 @@ export class SessionDO implements DurableObject {
     server.accept()
     this.activeWebSocket = server
 
-    // Send ready message with Schema encoding
-    const readyMsg = encodeReadyMessage(
-      new WsReadyMessage({
-        type: "ready",
-        sessionId: this.sessionState.sessionId,
-      })
-    )
-    server.send(JSON.stringify(readyMsg))
+    // Send appropriate message based on whether this is a restore or fresh connection
+    if (isRestore) {
+      // Send restore message with current state info
+      const restoreMsg = encodeRestoreMessage(
+        new WsRestoreMessage({
+          type: "restore",
+          sessionId: this.sessionState.sessionId,
+          playedNoteCount: this.sessionState.playedNotes.length,
+          matchedCount: this.sessionState.matchedIndices.size,
+        })
+      )
+      server.send(JSON.stringify(restoreMsg))
+    } else {
+      // Send ready message for fresh connection
+      const readyMsg = encodeReadyMessage(
+        new WsReadyMessage({
+          type: "ready",
+          sessionId: this.sessionState.sessionId,
+        })
+      )
+      server.send(JSON.stringify(readyMsg))
+    }
 
     // Start server-initiated heartbeat (every 30s)
     this.pingInterval = setInterval(() => {
@@ -370,6 +470,9 @@ export class SessionDO implements DurableObject {
     this.sessionState.playedNotes.push(playedNote)
     this.sessionState.matchResults.push(result)
 
+    // Persist state (debounced, max 1/sec)
+    this.schedulePersist()
+
     // Find original note time for UI mapping
     let originalNoteTime: number | null = null
     if (result.expectedNote) {
@@ -469,10 +572,73 @@ export class SessionDO implements DurableObject {
     // Session state preserved - will be cleared by /ws/end or timeout
   }
 
-  /** Full cleanup including session state */
-  private cleanup(): void {
+  /** Full cleanup including session state and storage */
+  private async cleanup(): Promise<void> {
     this.cleanupWebSocket()
     this.sessionState = null
+    // Clear all persisted state
+    await this.state.storage.deleteAll()
+  }
+
+  /**
+   * Schedule a debounced persist. Ensures at most one persist per second.
+   */
+  private schedulePersist(): void {
+    if (this.persistScheduled) {
+      return // Already scheduled
+    }
+
+    const now = Date.now()
+    const timeSinceLastPersist = now - this.lastPersistTime
+    const minInterval = 1000 // 1 second
+
+    if (timeSinceLastPersist >= minInterval) {
+      // Can persist immediately
+      void this.persistState()
+    } else {
+      // Schedule for later
+      this.persistScheduled = true
+      const delay = minInterval - timeSinceLastPersist
+      setTimeout(() => {
+        this.persistScheduled = false
+        void this.persistState()
+      }, delay)
+    }
+  }
+
+  /**
+   * Persist current session state to DO storage.
+   * Called with debouncing to avoid excessive writes.
+   */
+  private async persistState(): Promise<void> {
+    if (!this.sessionState) {
+      return
+    }
+
+    const now = Date.now()
+    this.lastPersistTime = now
+
+    const persisted: PersistedSessionState = {
+      sessionId: this.sessionState.sessionId,
+      pieceId: this.sessionState.pieceId,
+      expectedNotes: this.sessionState.expectedNotes,
+      originalNotes: this.sessionState.originalNotes,
+      matchedIndices: Array.from(this.sessionState.matchedIndices),
+      playedNotes: this.sessionState.playedNotes,
+      matchResults: this.sessionState.matchResults,
+      measureStart: this.sessionState.measureStart,
+      measureEnd: this.sessionState.measureEnd,
+      hand: this.sessionState.hand,
+      tempo: this.sessionState.tempo,
+      startTime: this.sessionState.startTime,
+      firstNoteOffset: this.sessionState.firstNoteOffset,
+      lastActivityTime: now,
+    }
+
+    await this.state.storage.put("persistedSession", persisted)
+
+    // Set/reset alarm for session timeout
+    await this.state.storage.setAlarm(now + SESSION_TIMEOUT_MS)
   }
 }
 
