@@ -1,9 +1,12 @@
 import { Effect, Layer } from "effect"
-import { NoteEvent, PlayedNote, Hand } from "@etude/shared"
-
-// Configuration constants
-const TIMING_TOLERANCE_MS = 150
-const TIMING_GRACE_MS = 75
+import {
+  NoteEvent,
+  PlayedNote,
+  Hand,
+  matchNote as sharedMatchNote,
+  calculateTimingScore,
+  DEFAULT_CONFIG,
+} from "@etude/shared"
 
 export type MatchResultType = "correct" | "wrong" | "extra"
 
@@ -45,111 +48,19 @@ export class ComparisonService extends Effect.Tag("ComparisonService")<
   }
 >() {}
 
-// Calculate timing score for a note
-function calculateTimingScore(offsetMs: number): number {
-  const absOffset = Math.abs(offsetMs)
-  if (absOffset <= TIMING_GRACE_MS) {
-    return 1.0 // Perfect timing
-  }
-  if (absOffset <= TIMING_TOLERANCE_MS) {
-    // Linear falloff from grace to tolerance
-    const range = TIMING_TOLERANCE_MS - TIMING_GRACE_MS
-    const distance = absOffset - TIMING_GRACE_MS
-    return 1.0 - distance / range
-  }
-  // Outside tolerance - still some partial credit
-  // Exponential falloff beyond tolerance
-  const beyondTolerance = absOffset - TIMING_TOLERANCE_MS
-  return Math.max(0, Math.exp(-beyondTolerance / 200) * 0.5)
-}
-
-// Pure function to match a single note
+// Wrapper function to adapt shared matchNote to local MatchResult interface
 function matchNotePure(
   playedNote: PlayedNote,
   expectedNotes: NoteEvent[],
   matchedIndices: Set<number>,
   hand: Hand
 ): MatchResult {
-  // Filter expected notes by hand (if not "both")
-  const eligibleNotes = expectedNotes
-    .map((note, index) => ({ note, index }))
-    .filter(({ note, index }) => {
-      // Don't match already matched notes
-      if (matchedIndices.has(index)) return false
-      // Filter by hand if not "both"
-      if (hand !== "both" && note.hand !== hand) return false
-      return true
-    })
-
-  if (eligibleNotes.length === 0) {
-    // No eligible notes - this is an extra note
-    return {
-      playedNote,
-      expectedNote: null,
-      result: "extra" as const,
-      timingOffset: 0,
-    }
-  }
-
-  // Find the closest unmatched note with the same pitch (greedy matching)
-  let bestMatch: { note: NoteEvent; index: number } | null = null
-  let bestDistance = Infinity
-
-  for (const { note, index } of eligibleNotes) {
-    if (note.pitch === playedNote.pitch) {
-      const distance = Math.abs(playedNote.timestamp - note.startTime)
-      if (distance < bestDistance) {
-        bestDistance = distance
-        bestMatch = { note, index }
-      }
-    }
-  }
-
-  if (bestMatch) {
-    // Found a matching pitch
-    const timingOffset = playedNote.timestamp - bestMatch.note.startTime
-    matchedIndices.add(bestMatch.index)
-
-    // Check if within tolerance for correct
-    const absOffset = Math.abs(timingOffset)
-    const isCorrect = absOffset <= TIMING_TOLERANCE_MS
-
-    return {
-      playedNote,
-      expectedNote: bestMatch.note,
-      result: isCorrect ? ("correct" as const) : ("wrong" as const),
-      timingOffset,
-    }
-  }
-
-  // No matching pitch found - this is a wrong note
-  // Find the closest expected note by time to provide timing offset
-  let closestByTime: { note: NoteEvent; index: number } | null = null
-  let closestTimeDistance = Infinity
-
-  for (const { note, index } of eligibleNotes) {
-    const distance = Math.abs(playedNote.timestamp - note.startTime)
-    if (distance < closestTimeDistance) {
-      closestTimeDistance = distance
-      closestByTime = { note, index }
-    }
-  }
-
-  if (closestByTime) {
-    const timingOffset = playedNote.timestamp - closestByTime.note.startTime
-    return {
-      playedNote,
-      expectedNote: closestByTime.note,
-      result: "wrong" as const,
-      timingOffset,
-    }
-  }
-
+  const result = sharedMatchNote(playedNote, expectedNotes, matchedIndices, hand, DEFAULT_CONFIG)
   return {
-    playedNote,
-    expectedNote: null,
-    result: "extra" as const,
-    timingOffset: 0,
+    playedNote: result.playedNote as PlayedNote,
+    expectedNote: result.expectedNote,
+    result: result.result,
+    timingOffset: result.timingOffset,
   }
 }
 

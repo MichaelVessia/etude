@@ -9,6 +9,8 @@ import {
   WsResultMessage,
   WsPingMessage,
   WsSessionEndMessage,
+  matchNote as sharedMatchNote,
+  DEFAULT_CONFIG,
 } from "@etude/shared"
 import { Option, Schema } from "effect"
 
@@ -23,9 +25,6 @@ const encodeSessionEndMessage = Schema.encodeSync(WsSessionEndMessage)
 declare const WebSocketPair: {
   new (): { 0: CFWebSocket; 1: CFWebSocket }
 }
-
-// Configuration constants (duplicated from comparison.ts to avoid Effect dependency in DO)
-const TIMING_TOLERANCE_MS = 150
 
 /**
  * In-memory session state during WebSocket connection.
@@ -392,104 +391,13 @@ export class SessionDO implements DurableObject {
     matchedIndices: Set<number>,
     hand: Hand
   ): MatchResult {
-    // Filter expected notes by hand and unmatched
-    const eligibleNotes = expectedNotes
-      .map((note, index) => ({ note, index }))
-      .filter(({ note, index }) => {
-        if (matchedIndices.has(index)) return false
-        if (hand !== "both" && note.hand !== hand) return false
-        return true
-      })
-
-    console.log(`[DEBUG] matchNote: played pitch=${playedNote.pitch} time=${playedNote.timestamp} eligible=${eligibleNotes.length}`)
-    if (eligibleNotes.length > 0 && eligibleNotes.length <= 10) {
-      console.log(`[DEBUG] matchNote: expected pitches=${eligibleNotes.map(e => `${e.note.pitch}@${e.note.startTime}`).join(",")}`)
-    }
-
-    if (eligibleNotes.length === 0) {
-      console.log(`[DEBUG] matchNote: no eligible notes, result=extra`)
-      return {
-        playedNote,
-        expectedNote: null,
-        result: "extra",
-        timingOffset: 0,
-      }
-    }
-
-    // Find closest unmatched note with same pitch
-    // Strategy: prefer past notes (already due) over future notes, and among past notes prefer
-    // the earliest one (sequential order) to avoid "stealing" later notes when playing late
-    let bestMatch: { note: NoteEvent; index: number } | null = null
-    let bestIsPast = false
-
-    for (const { note, index } of eligibleNotes) {
-      if (note.pitch === playedNote.pitch) {
-        const isPast = note.startTime <= playedNote.timestamp
-
-        if (!bestMatch) {
-          // First match
-          bestMatch = { note, index }
-          bestIsPast = isPast
-        } else {
-          // Priority: past notes first, then earliest by startTime (not closest by distance)
-          const shouldReplace =
-            (!bestIsPast && isPast) || // Prefer past over future
-            (isPast && bestIsPast && note.startTime < bestMatch.note.startTime) || // Among past: prefer earliest
-            (!isPast && !bestIsPast && note.startTime < bestMatch.note.startTime) // Among future: prefer earliest
-
-          if (shouldReplace) {
-            bestMatch = { note, index }
-            bestIsPast = isPast
-          }
-        }
-      }
-    }
-
-    if (bestMatch) {
-      const timingOffset = playedNote.timestamp - bestMatch.note.startTime
-      matchedIndices.add(bestMatch.index)
-
-      const absOffset = Math.abs(timingOffset)
-      const isCorrect = absOffset <= TIMING_TOLERANCE_MS
-
-      console.log(`[DEBUG] matchNote: matched! offset=${timingOffset} threshold=${TIMING_TOLERANCE_MS} result=${isCorrect ? "correct" : "wrong"}`)
-      return {
-        playedNote,
-        expectedNote: bestMatch.note,
-        result: isCorrect ? "correct" : "wrong",
-        timingOffset,
-      }
-    }
-
-    // No matching pitch - find closest by time for offset
-    let closestByTime: { note: NoteEvent; index: number } | null = null
-    let closestTimeDistance = Infinity
-
-    for (const { note, index } of eligibleNotes) {
-      const distance = Math.abs(playedNote.timestamp - note.startTime)
-      if (distance < closestTimeDistance) {
-        closestTimeDistance = distance
-        closestByTime = { note, index }
-      }
-    }
-
-    if (closestByTime) {
-      const timingOffset = playedNote.timestamp - closestByTime.note.startTime
-      console.log(`[DEBUG] matchNote: no pitch match, closest expected=${closestByTime.note.pitch}@${closestByTime.note.startTime} result=wrong`)
-      return {
-        playedNote,
-        expectedNote: closestByTime.note,
-        result: "wrong",
-        timingOffset,
-      }
-    }
-
-    console.log(`[DEBUG] matchNote: no match at all, result=extra`)
+    // Use shared note matching logic (orders by timing distance, closest first)
+    const result = sharedMatchNote(playedNote, expectedNotes, matchedIndices, hand, DEFAULT_CONFIG)
     return {
-      playedNote,
-      expectedNote: null,
-      result: "extra",
-      timingOffset: 0,
+      playedNote: result.playedNote as PlayedNote,
+      expectedNote: result.expectedNote,
+      result: result.result,
+      timingOffset: result.timingOffset,
     }
   }
 
