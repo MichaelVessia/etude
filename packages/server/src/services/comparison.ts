@@ -112,7 +112,7 @@ function matchNotePure(
 
     // Check if within tolerance for correct
     const absOffset = Math.abs(timingOffset)
-    const isCorrect = absOffset <= TIMING_TOLERANCE_MS * 2 // More lenient for "correct"
+    const isCorrect = absOffset <= TIMING_TOLERANCE_MS
 
     return {
       playedNote,

@@ -312,5 +312,105 @@ describe("ComparisonService", () => {
         expect(result.result).toBe("extra")
       }).pipe(Effect.provide(ComparisonServiceLive))
     )
+
+    it.effect("marks note at 149ms offset as correct (within 150ms tolerance)", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        const expected = [note(60, 1000)]
+        const matchedIndices = new Set<number>()
+
+        // Play 149ms late (just within 150ms tolerance)
+        const result = yield* service.matchNote(
+          played(60, 1149),
+          expected,
+          matchedIndices,
+          "both"
+        )
+
+        expect(result.result).toBe("correct")
+        expect(result.timingOffset).toBe(149)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("marks note at 150ms offset as correct (exactly at tolerance)", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        const expected = [note(60, 1000)]
+        const matchedIndices = new Set<number>()
+
+        // Play exactly 150ms late (at tolerance boundary)
+        const result = yield* service.matchNote(
+          played(60, 1150),
+          expected,
+          matchedIndices,
+          "both"
+        )
+
+        expect(result.result).toBe("correct")
+        expect(result.timingOffset).toBe(150)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("marks note at 151ms offset as wrong (outside 150ms tolerance)", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        const expected = [note(60, 1000)]
+        const matchedIndices = new Set<number>()
+
+        // Play 151ms late (just outside 150ms tolerance)
+        const result = yield* service.matchNote(
+          played(60, 1151),
+          expected,
+          matchedIndices,
+          "both"
+        )
+
+        expect(result.result).toBe("wrong")
+        expect(result.timingOffset).toBe(151)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("marks early note at -149ms offset as correct", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        const expected = [note(60, 1000)]
+        const matchedIndices = new Set<number>()
+
+        // Play 149ms early (within tolerance)
+        const result = yield* service.matchNote(
+          played(60, 851),
+          expected,
+          matchedIndices,
+          "both"
+        )
+
+        expect(result.result).toBe("correct")
+        expect(result.timingOffset).toBe(-149)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
+
+    it.effect("marks early note at -151ms offset as wrong", () =>
+      Effect.gen(function* () {
+        const service = yield* ComparisonService
+
+        const expected = [note(60, 1000)]
+        const matchedIndices = new Set<number>()
+
+        // Play 151ms early (outside tolerance)
+        const result = yield* service.matchNote(
+          played(60, 849),
+          expected,
+          matchedIndices,
+          "both"
+        )
+
+        expect(result.result).toBe("wrong")
+        expect(result.timingOffset).toBe(-151)
+      }).pipe(Effect.provide(ComparisonServiceLive))
+    )
   })
 })

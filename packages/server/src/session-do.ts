@@ -450,9 +450,9 @@ export class SessionDO implements DurableObject {
       matchedIndices.add(bestMatch.index)
 
       const absOffset = Math.abs(timingOffset)
-      const isCorrect = absOffset <= TIMING_TOLERANCE_MS * 2
+      const isCorrect = absOffset <= TIMING_TOLERANCE_MS
 
-      console.log(`[DEBUG] matchNote: matched! offset=${timingOffset} threshold=${TIMING_TOLERANCE_MS * 2} result=${isCorrect ? "correct" : "wrong"}`)
+      console.log(`[DEBUG] matchNote: matched! offset=${timingOffset} threshold=${TIMING_TOLERANCE_MS} result=${isCorrect ? "correct" : "wrong"}`)
       return {
         playedNote,
         expectedNote: bestMatch.note,

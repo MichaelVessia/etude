@@ -1,12 +1,21 @@
 {
   "project": "etude",
-  "description": "Effect Best Practices Remediation - Fix catchAll, generic Error, and error handling patterns",
-  "version": "1.0.0",
-  "created_at": "2025-01-15",
-  "updated_at": "2025-01-15",
-  "specs_dir": "docs/specs/",
+  "description": "Scoring System Fixes - Fix timing tolerance, consolidate matching logic, and improve test coverage",
+  "version": "2.0.0",
+  "created_at": "2025-01-20",
+  "updated_at": "2025-01-20",
+  "specs_dir": "plans/",
   "available_specs": [
-    "effect-best-practices-remediation.md"
+    "fix-01-timing-tolerance.md",
+    "fix-02-consolidate-matching-logic.md",
+    "fix-03-timing-calculation-coherence.md",
+    "fix-04-chord-handling.md",
+    "fix-05-playhead-tempo.md",
+    "fix-06-musicxml-parser.md",
+    "fix-07-websocket-protocol.md",
+    "fix-08-session-persistence.md",
+    "fix-09-cleanup-debug-logs.md",
+    "fix-10-test-coverage.md"
   ],
   "technology": {
     "effect": {
@@ -45,101 +54,280 @@
   "stories": [
     {
       "id": "1.1.0",
-      "phase": "Phase 1: Tagged Errors",
-      "epic": "Session State Store",
-      "title": "Replace generic Error with DOStateError",
-      "description": "Create DOStateError tagged error and refactor session-state-store.ts to use it instead of generic Error class in Effect.tryPromise catch handlers.",
+      "phase": "Phase 1: Core Scoring",
+      "epic": "Timing Tolerance",
+      "title": "Fix 300ms to 150ms timing tolerance bug",
+      "description": "session-do.ts:453 uses TIMING_TOLERANCE_MS * 2 (300ms) instead of the specified 150ms tolerance. Remove the erroneous multiplier.",
       "specs": [
-        "effect-best-practices-remediation.md"
+        "fix-01-timing-tolerance.md"
       ],
       "acceptance_criteria": [
-        "DOStateError extends Schema.TaggedError with operation (get|set|clear) and message fields",
-        "DOStateError defined in packages/server/src/services/session-state-store.ts or errors.ts",
-        "All 3 Effect.tryPromise catch handlers use DOStateError instead of new Error(...)",
-        "catchAll handlers remain (graceful degradation is intentional) but now catch DOStateError",
+        "TIMING_TOLERANCE_MS used directly without * 2 multiplier",
+        "Note at 149ms offset marked correct",
+        "Note at 151ms offset marked wrong",
+        "comparison.ts uses same tolerance value",
+        "Edge case tests added at tolerance boundary",
         "bun test passes"
       ],
       "technical_details": {
         "files": [
-          "packages/server/src/services/session-state-store.ts"
+          "packages/server/src/session-do.ts",
+          "packages/server/src/services/comparison.ts",
+          "packages/server/src/services/comparison.test.ts"
         ],
-        "pattern": "Schema.TaggedError for domain-specific errors"
+        "pattern": "Single source of truth for timing constants"
       },
       "status": "complete",
       "estimated_complexity": "small"
+    },
+    {
+      "id": "1.2.0",
+      "phase": "Phase 1: Core Scoring",
+      "epic": "Note Matching",
+      "title": "Consolidate duplicate note matching logic",
+      "description": "Create shared pure note-matching module to eliminate duplicate algorithms in comparison.ts (orders by distance) and session-do.ts (orders by startTime).",
+      "specs": [
+        "fix-02-consolidate-matching-logic.md"
+      ],
+      "acceptance_criteria": [
+        "New packages/shared/src/note-matching.ts with zero Effect dependencies",
+        "Canonical behavior: order by timing distance (closest first)",
+        "comparison.ts imports and uses shared matchNote function",
+        "session-do.ts imports and uses same shared matchNote function",
+        "Unit tests verify identical results from both code paths",
+        "Tests cover: various timing offsets, chords, out-of-order playing",
+        "bun test passes"
+      ],
+      "technical_details": {
+        "files": [
+          "packages/shared/src/note-matching.ts",
+          "packages/shared/src/index.ts",
+          "packages/server/src/services/comparison.ts",
+          "packages/server/src/session-do.ts",
+          "packages/shared/src/note-matching.test.ts"
+        ],
+        "pattern": "Pure functions for cross-environment sharing"
+      },
+      "status": "pending",
+      "estimated_complexity": "medium"
+    },
+    {
+      "id": "1.3.0",
+      "phase": "Phase 1: Core Scoring",
+      "epic": "Test Coverage",
+      "title": "Add critical test coverage for scoring behavior",
+      "description": "Add missing tests for chord handling, tolerance boundaries, local vs WebSocket parity, and edge cases.",
+      "specs": [
+        "fix-10-test-coverage.md"
+      ],
+      "acceptance_criteria": [
+        "Chord tests: in-order, out-of-order, partial chord playing",
+        "Timing tolerance boundary tests at 149ms, 150ms, 151ms",
+        "Parity test comparing comparison.ts and session-do.ts results",
+        "Edge case tests: rapid repeated notes, out-of-order timestamps",
+        "All new tests pass",
+        "bun test passes"
+      ],
+      "technical_details": {
+        "files": [
+          "packages/server/src/services/comparison.test.ts",
+          "packages/shared/src/note-matching.test.ts",
+          "packages/client/src/hooks/useNoteColoring.test.ts"
+        ],
+        "pattern": "Edge case coverage for scoring correctness"
+      },
+      "status": "pending",
+      "estimated_complexity": "medium"
     },
     {
       "id": "2.1.0",
-      "phase": "Phase 2: HTTP Routes",
-      "epic": "Error Handling",
-      "title": "Update piece routes to use catchTag",
-      "description": "Replace blanket catchAll with specific catchTag handlers in routes/piece.ts for proper HTTP status codes per error type.",
+      "phase": "Phase 2: Timing Coherence",
+      "epic": "Time Reference Frames",
+      "title": "Define timing contract with branded types",
+      "description": "Create clear types for PieceTime, SessionTime, and PlaybackTime to prevent conflation of timing reference frames.",
       "specs": [
-        "effect-best-practices-remediation.md"
+        "fix-03-timing-calculation-coherence.md"
       ],
       "acceptance_criteria": [
-        "importPiece route uses catchTag for ParseError (400), SqlError (500)",
-        "listPieces route uses catchTag for SqlError (500)",
-        "No blanket catchAll converting all errors to 400",
-        "Response bodies include error field with meaningful message",
+        "packages/shared/src/timing.ts with branded types",
+        "PieceTime: ms from piece start (Verovio onset)",
+        "SessionTime: ms from session start",
+        "PlaybackTime: ms from first played note",
+        "Conversion functions between reference frames",
+        "Audit complete: all timestamp usages documented",
         "bun test passes"
       ],
       "technical_details": {
         "files": [
-          "packages/server/src/api/routes/piece.ts"
+          "packages/shared/src/timing.ts",
+          "packages/server/src/services/session.ts"
         ],
-        "pattern": "Effect.catchTag for discriminated error handling"
+        "pattern": "Branded types for compile-time safety"
       },
-      "status": "complete",
-      "estimated_complexity": "small"
+      "status": "pending",
+      "estimated_complexity": "medium"
     },
     {
       "id": "2.2.0",
-      "phase": "Phase 2: HTTP Routes",
-      "epic": "Error Handling",
-      "title": "Update session routes to use catchTag",
-      "description": "Replace blanket catchAll with specific catchTag handlers in routes/session.ts. 5 endpoints need updating.",
+      "phase": "Phase 2: Timing Coherence",
+      "epic": "Chord Handling",
+      "title": "Fix chord note coloring for out-of-order playing",
+      "description": "Update useNoteColoring.ts to use time-based matching instead of sequential per-pitch indexing for chords.",
       "specs": [
-        "effect-best-practices-remediation.md"
+        "fix-04-chord-handling.md"
       ],
       "acceptance_criteria": [
-        "All 5 session routes use catchTag instead of catchAll",
-        "PieceNotFound returns 404",
-        "SessionError returns 400 with reason field",
-        "SqlError returns 500",
-        "No blanket catchAll converting all errors to 400",
+        "Chord notes matched by timing proximity, not pitch index order",
+        "All notes in chord eligible simultaneously regardless of play order",
+        "Track colored state per note element ID, not per pitch index",
+        "Test: C4-E4-G4 in order -> all green",
+        "Test: E4-C4-G4 out of order -> all green",
+        "Test: Miss one chord note -> that note red, others green",
         "bun test passes"
       ],
       "technical_details": {
         "files": [
-          "packages/server/src/api/routes/session.ts"
+          "packages/client/src/hooks/useNoteColoring.ts",
+          "packages/client/src/hooks/useNoteColoring.test.ts"
         ],
-        "pattern": "Effect.catchTag for discriminated error handling"
+        "pattern": "Time-window matching for simultaneous notes"
       },
-      "status": "complete",
-      "estimated_complexity": "small"
+      "status": "pending",
+      "estimated_complexity": "medium"
+    },
+    {
+      "id": "2.3.0",
+      "phase": "Phase 2: Timing Coherence",
+      "epic": "Playhead Sync",
+      "title": "Fix playhead tempo alignment for missed note detection",
+      "description": "Add tempo conversion so missed note detection uses consistent time reference with playhead position.",
+      "specs": [
+        "fix-05-playhead-tempo.md"
+      ],
+      "acceptance_criteria": [
+        "pieceToPlaybackTime and playbackToPieceTime conversion functions",
+        "Missed note detection applies tempo conversion to onset times",
+        "At tempo 50%: notes not marked missed too early",
+        "At tempo 150%: notes not marked missed too late",
+        "Visual playhead crosses notes at moment they're due",
+        "bun test passes"
+      ],
+      "technical_details": {
+        "files": [
+          "packages/client/src/hooks/usePlayhead.ts",
+          "packages/client/src/hooks/useNoteColoring.ts",
+          "packages/shared/src/timing.ts"
+        ],
+        "pattern": "Tempo-aware time conversions"
+      },
+      "status": "pending",
+      "estimated_complexity": "medium"
     },
     {
       "id": "3.1.0",
-      "phase": "Phase 3: RPC Handlers",
-      "epic": "Error Handling",
-      "title": "Fix catchAll in piece RPC handler",
-      "description": "Replace catchAll with catchTag in rpc/piece.ts:49 to only catch expected SqlError, not swallow all errors.",
+      "phase": "Phase 3: Parser & Protocol",
+      "epic": "MusicXML Parser",
+      "title": "Fix voice/backup handling in MusicXML parser",
+      "description": "Refactor musicxml.ts to process backup/forward elements in document order for correct multi-voice timing.",
       "specs": [
-        "effect-best-practices-remediation.md"
+        "fix-06-musicxml-parser.md"
       ],
       "acceptance_criteria": [
-        "pieceRepo.getNotes uses Effect.catchTag('SqlError', ...) instead of catchAll",
-        "Unexpected errors propagate correctly (not silently swallowed)",
+        "Process measure children in document order",
+        "Cursor moves backward on <backup>, forward on <forward>",
+        "Voice state tracking for voice-specific timing",
+        "Test files: two-voice treble, piano grand staff",
+        "Bach invention parses with correct timings",
         "bun test passes"
       ],
       "technical_details": {
         "files": [
-          "packages/server/src/rpc/piece.ts"
+          "packages/server/src/services/musicxml.ts",
+          "packages/server/src/services/musicxml.test.ts",
+          "packages/server/src/test-fixtures/"
         ],
-        "pattern": "Effect.catchTag for specific error handling"
+        "pattern": "Document-order traversal with cursor management"
       },
-      "status": "complete",
+      "status": "pending",
+      "estimated_complexity": "medium"
+    },
+    {
+      "id": "3.2.0",
+      "phase": "Phase 3: Parser & Protocol",
+      "epic": "WebSocket Protocol",
+      "title": "Add missing fields to WebSocket result messages",
+      "description": "Extend NoteResultMessage to include expectedTime, playedTime, and offsetMs for proper client timing feedback.",
+      "specs": [
+        "fix-07-websocket-protocol.md"
+      ],
+      "acceptance_criteria": [
+        "NoteResultMessage includes playedTime, expectedTime, offsetMs fields",
+        "session-do.ts sends all timing fields in result messages",
+        "useSession.ts uses actual expectedTime, not playedTime copy",
+        "No type errors between shared types and usage",
+        "bun test passes"
+      ],
+      "technical_details": {
+        "files": [
+          "packages/shared/src/ws-protocol.ts",
+          "packages/server/src/session-do.ts",
+          "packages/client/src/hooks/useSession.ts"
+        ],
+        "pattern": "Protocol extension with backwards compatibility"
+      },
+      "status": "pending",
+      "estimated_complexity": "small"
+    },
+    {
+      "id": "4.1.0",
+      "phase": "Phase 4: Reliability",
+      "epic": "Session Persistence",
+      "title": "Implement full session state persistence in DO",
+      "description": "Persist playedNotes and matchResults to DO storage for recovery on reconnect, with debounced writes and session timeout.",
+      "specs": [
+        "fix-08-session-persistence.md"
+      ],
+      "acceptance_criteria": [
+        "PersistedSessionState schema defined",
+        "playedNotes and matchResults persisted (debounced, max 1/sec)",
+        "State restored on reconnect",
+        "Session timeout alarm cleans up after 1 hour idle",
+        "Test: simulate DO eviction, verify state restored",
+        "bun test passes"
+      ],
+      "technical_details": {
+        "files": [
+          "packages/server/src/session-do.ts",
+          "packages/shared/src/ws-protocol.ts"
+        ],
+        "pattern": "Debounced persistence with alarm-based cleanup"
+      },
+      "status": "pending",
+      "estimated_complexity": "medium"
+    },
+    {
+      "id": "4.2.0",
+      "phase": "Phase 4: Reliability",
+      "epic": "Code Cleanup",
+      "title": "Remove debug console.log statements",
+      "description": "Clean up [DEBUG] logs from session-do.ts, keep essential error logging with structured format.",
+      "specs": [
+        "fix-09-cleanup-debug-logs.md"
+      ],
+      "acceptance_criteria": [
+        "No [DEBUG] prefixed console.log in production code",
+        "Essential logs (errors, session start/end) use structured format",
+        "LOG_LEVEL env var controls debug output",
+        "bun test passes"
+      ],
+      "technical_details": {
+        "files": [
+          "packages/server/src/session-do.ts",
+          "packages/server/src/services/comparison.ts"
+        ],
+        "pattern": "Structured logging with level configuration"
+      },
+      "status": "pending",
       "estimated_complexity": "small"
     }
   ]
